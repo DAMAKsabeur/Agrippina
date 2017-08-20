@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config_root>
+  <config_data>
+    <appboot_key>etc/keys/appboot.key</appboot_key>
+  </config_data>
+</config_root>
