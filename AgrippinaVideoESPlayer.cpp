@@ -424,7 +424,8 @@ void AgrippinaVideoESPlayer::flush()
     // Not implemented.  Video is only flushed via a flush on the entire
     // playback group.
 
-    (void)m_NeroVideoDecoder->Flush();
+    beginFlush();
+    endFlush();
 }
 
 void AgrippinaVideoESPlayer::beginFlush()

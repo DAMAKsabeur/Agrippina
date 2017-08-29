@@ -1,5 +1,4 @@
 #include "NeroIntelCE4x00AudioDecoder.h"
-
 using namespace std;
 
 /*************************************************************************
@@ -33,8 +32,11 @@ void *aud_evt_handler(void* args)
 	            }
 	         }
 	      }
-	      if(triggered_event !=0)
+	      if(triggered_event !=ISMD_EVENT_HANDLE_INVALID)
 	      {
+            pthread_mutex_lock(&m_NeroIntelCE4x00AudioDecoder->mutex_stock);
+	    	m_NeroIntelCE4x00AudioDecoder->triggered_event = triggered_event;
+	        pthread_mutex_unlock(&m_NeroIntelCE4x00AudioDecoder->mutex_stock);
 	        m_NeroIntelCE4x00AudioDecoder->Notify();
 	      }
 	      usleep(10000);
@@ -118,6 +120,8 @@ ismd_result_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_unsubscri
   }
   return (ismd_ret);
 }
+
+
 ismd_audio_format_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_NERO2ISMD_codeRemap(Nero_audio_codec_t NeroAudioAlgo)
 {
 
@@ -258,8 +262,13 @@ NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder()
     audio_processor = (ismd_audio_processor_t)NeroIntelCE4x00AudioProcessor::instance()->GetHandle();
     aud_evt_to_monitor = {ISMD_AUDIO_NOTIFY_INPUT_FULL, ISMD_AUDIO_NOTIFY_INPUT_EMPTY, ISMD_AUDIO_NOTIFY_DATA_RENDERED };
     ismd_aud_evt_tab = {0,};
-
+    triggered_event = 0x00;
     aud_evt_handler_thread_exit = false;
+    if (pthread_mutex_init(&mutex_stock, NULL) != 0)
+    {
+        result = NERO_ERROR_INTERNAL;
+        NERO_AUDIO_ERROR("mopal_fpout_pdd_data.dev.led_mutex  init failed \n");
+    }
 }
 
 
@@ -278,7 +287,13 @@ NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder(NeroSTC* NeroSTC_ptr)
     audio_processor = (ismd_audio_processor_t)NeroIntelCE4x00AudioProcessor::instance()->GetHandle();
     aud_evt_to_monitor = {ISMD_AUDIO_NOTIFY_INPUT_FULL, ISMD_AUDIO_NOTIFY_INPUT_EMPTY, ISMD_AUDIO_NOTIFY_DATA_RENDERED };
     ismd_aud_evt_tab = {0,};
+    triggered_event = 0x00;
     aud_evt_handler_thread_exit = false;
+    if (pthread_mutex_init(&mutex_stock, NULL) != 0)
+    {
+        result = NERO_ERROR_INTERNAL;
+        NERO_AUDIO_ERROR("mutex_stock  init failed \n");
+    }
 }
 
 /** Nero ISMD Audio decoder constructor */
@@ -289,6 +304,12 @@ NeroIntelCE4x00AudioDecoder::~NeroIntelCE4x00AudioDecoder()
     Nero_error_t     result = NERO_SUCCESS;
     int rc = 0x00;
     ismd_result_t ismd_ret = ISMD_SUCCESS;
+    aud_evt_handler_thread_exit = true;
+    if(pthread_mutex_destroy(&mutex_stock)!=0)
+    {
+        result = NERO_ERROR_INTERNAL;
+        NERO_AUDIO_ERROR("mutex_stock mutex destruction  fail ... (%d) \n", result);
+    }
     ismd_ret = ismd_clock_alloc(ISMD_CLOCK_TYPE_FIXED, &clock_handle);
     if (ISMD_SUCCESS != ismd_ret)
     {
@@ -316,9 +337,10 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderInit (Nero_audio_codec
     audio_output.ch_config = ISMD_AUDIO_STEREO;
     audio_output.out_mode = ISMD_AUDIO_OUTPUT_PCM;
     audio_output.sample_rate = 48000;
-    audio_output.sample_size = 16;
+    audio_output.sample_size = 24;
     audio_output.stream_delay = 0;
     audio_output.ch_map = AUDIO_CHAN_CONFIG_2_CH;
+    //ismd_audio_input_set_passthrough
     _TRY(ismd_ret,result,ismd_audio_add_input_port,(audio_processor, false, &audio_handle, &audio_input_port_handle));
     _TRY(ismd_ret,result,ismd_audio_input_set_data_format,(audio_processor, audio_handle, aud_fmt));
     _TRY(ismd_ret,result,ismd_audio_input_enable,(audio_processor, audio_handle));
@@ -641,7 +663,15 @@ int NeroIntelCE4x00AudioDecoder::NeroAudioDecoderGetport()
     return ((int)audio_input_port_handle);
 
 }
+
 Info NeroIntelCE4x00AudioDecoder::Statut(void) const
 {
-	return (0);
+
+	int evt = 0x00;
+    pthread_mutex_lock((pthread_mutex_t*)&mutex_stock);
+    evt = triggered_event;
+    pthread_mutex_unlock((pthread_mutex_t*)&mutex_stock);
+    NERO_AUDIO_NOTICE("NeroIntelCE4x00AudioDecoder :: triggered_event = %d \n",evt);
+	return ((int)evt);
 }
+

@@ -8,7 +8,7 @@
 
 using namespace std;
  
-void Observateur::Update(const Observable* observable) const
+void Observateur::Update(const Observable* observable)
 {
   //on affiche l'état de la variable
   cout<<observable->Statut()<<endl;

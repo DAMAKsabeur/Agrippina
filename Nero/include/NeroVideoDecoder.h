@@ -42,7 +42,7 @@ virtual uint64_t GetLastPts();
 virtual NeroDecoderState_t GetState();
 /* for testing */
 virtual int Getport();
-
+virtual void Update(const Observable* observable);
 private:
 /* private functions */
 

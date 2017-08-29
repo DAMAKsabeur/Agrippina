@@ -11,6 +11,7 @@
 #include "NeroSTC.h"
 #include "NeroConstants.h"
 #include "Observateur.h"
+
 using namespace std;
 
 class INeroDecoder : public Observateur{

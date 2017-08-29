@@ -479,6 +479,10 @@ ModelGroupFileSystem::ModelGroupFileSystem(const std::string &idFile, const std:
     ncf_kph = Base64::decode(kph);
     NRDP_OBJECTCOUNT_DESCRIBE(ncf_kpe, "DPI_NCF_KPE");
     NRDP_OBJECTCOUNT_DESCRIBE(ncf_kph, "DPI_NCF_KPH");
+    Log::error(TRACE_DPI, "kpe = %s",kpe.c_str());
+    Log::error(TRACE_DPI, "kph = %s",kph.c_str());
+    Log::error(TRACE_DPI, "mEsn = %s",mEsn.c_str());
+    //Log::error(TRACE_DPI, "ncf_kpe = %d",ncf_kpe.mData);
 }
 
 bool FileSystem::isScreensaverOn() const

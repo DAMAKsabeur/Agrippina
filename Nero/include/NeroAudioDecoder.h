@@ -4,10 +4,10 @@
 #include "NeroSTC.h"
 #include "INeroDecoder.h"
 #include "NeroIntelCE4x00AudioDecoder.h"
-
+#include "Observable.h"
 using namespace std;
 
-class NeroAudioDecoder : INeroDecoder {
+class NeroAudioDecoder : INeroDecoder , public Observable  {
 public:
 
 NeroAudioDecoder();
@@ -29,15 +29,16 @@ NeroDecoderState_t GetState();
 
 /* for testing */
 int Getport();
-
+virtual void Update(const Observable* observable);
+Info Statut(void) const;
 private:
 
 /* private functions */
-
+void UpdateStatus();
 /* private variables */
 NeroAudioDecoder_class* m_NeroAudioDecoder;
 bool internal_clock;
 NeroSTC* stc;
-
+Info evt;
 };
 #endif /*NERO_AUDIO_DECODER_H_*/

@@ -5,8 +5,10 @@
 #include "NeroIntelCE4x00AudioProcessor.h"
 #include "NeroSTC.h"
 #include "Observable.h"
+
 extern "C"
 {
+#include <pthread.h>
 #include "osal.h"
 #include "ismd_core.h"
 #include "ismd_global_defs.h"
@@ -30,7 +32,8 @@ public:
 bool aud_evt_handler_thread_exit;
 ismd_event_t ismd_aud_evt_tab[AUDIO_NB_EVENT_TO_MONITOR];
 ismd_audio_notification_t aud_evt_to_monitor [AUDIO_NB_EVENT_TO_MONITOR];
-
+ismd_event_t triggered_event;
+pthread_mutex_t mutex_stock;
 NeroIntelCE4x00AudioDecoder();
 NeroIntelCE4x00AudioDecoder(NeroSTC* NeroSTC_ptr);
 ~NeroIntelCE4x00AudioDecoder();
@@ -49,7 +52,6 @@ NeroDecoderState_t NeroAudioDecoderGetState();
 /** for testing to be used for PES injection */
 int            NeroAudioDecoderGetport();
 /** to be checked observer pattern*/
-void Change(int valeur);
 Info Statut(void) const;
 /*********************/
 private:

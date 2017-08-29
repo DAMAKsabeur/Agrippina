@@ -41,14 +41,14 @@
 #include "NeroSTC.h"
 #include "NeroAudioDecoder.h"
 #include "NeroConstants.h"
-
+#include "Observateur.h"
 namespace netflix {
 namespace device {
 namespace esplayer {
 
 class DeviceThread;
 
-class NRDP_EXPORTABLE AgrippinaAudioESPlayer :  public AgrippinaESPlayer
+class NRDP_EXPORTABLE AgrippinaAudioESPlayer :  public AgrippinaESPlayer, public Observateur
 {
 public:
 	AgrippinaAudioESPlayer(NeroAudioDecoder* NeroAudioDecoder_ptr);
@@ -68,7 +68,7 @@ public:
     virtual void underflowReporter();
 
     bool isDisabledOrPending();
-
+    virtual void Update(const Observable* observable);
     class DecodedAudioBuffer
     {
     public:

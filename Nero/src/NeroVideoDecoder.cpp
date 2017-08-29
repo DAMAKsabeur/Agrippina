@@ -17,7 +17,7 @@ NeroVideoDecoder::NeroVideoDecoder()
     internal_clock = true;
     stc =  new NeroSTC();
     m_NeroVideoDecoder = new NeroVideoDecoder_class(stc);
-
+    m_NeroVideoDecoder->AddObs(this);
 }
 
 /**2end constructor with stc: this shall use passed STC to play video in stc master mode
@@ -28,19 +28,20 @@ NeroVideoDecoder::NeroVideoDecoder(NeroSTC* m_NeroSTC)
     internal_clock = false;
     stc = m_NeroSTC;
     m_NeroVideoDecoder = new NeroVideoDecoder_class(stc);
+    m_NeroVideoDecoder->AddObs(this);
 }
 
 /** video decoder distructor */
 
 NeroVideoDecoder::~NeroVideoDecoder()
 {
-	delete m_NeroVideoDecoder;
-	m_NeroVideoDecoder = NULL;
 	if (internal_clock == true)
 	{
 		delete stc;
 	}
-
+	m_NeroVideoDecoder->DelObs(this);
+	delete m_NeroVideoDecoder;
+	m_NeroVideoDecoder = NULL;
 }
 
 /** video decoder: setup the video plane */
@@ -161,3 +162,10 @@ int NeroVideoDecoder::Getport()
 	return((int)m_NeroVideoDecoder->NeroVideoDecoderGetport());
 }
 
+void NeroVideoDecoder::Update(const Observable* observable)
+{
+
+	int  evt = observable->Statut();
+	NERO_DEBUG ("NeroVideoDecoder update Statut = %d \n",evt);
+
+}
