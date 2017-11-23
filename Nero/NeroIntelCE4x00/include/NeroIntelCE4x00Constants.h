@@ -1,7 +1,14 @@
+#ifndef NEROINTELCE4X00_CONSTTANTS_H_
+#define NEROINTELCE4X00_CONSTTANTS_H_
+
 extern "C"
 {
 #include "ismd_global_defs.h"
 }
+
+
+
+
 /* audio traces debug */
 #define NERO_AUDIO_DEBUG printf
 #define NERO_AUDIO_NOTICE printf
@@ -33,3 +40,6 @@ typedef ismd_clock_t nero_clock_handle_t;
         goto error;\
     }\
 } while(0)
+
+#define NERO_EVENT_TIMEOUT         0x0A
+#endif /*NEROINTELCE4X00_CONSTTANTS_H_ */

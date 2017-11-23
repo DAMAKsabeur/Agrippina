@@ -25,6 +25,8 @@ include_directories(${NERO_INCLUDE_DIRECTORIES})
 set(Nero_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Observable.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Observateur.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroBlockingQueue.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroSystemClock.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroSTC.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroAudioDecoder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroVideoDecoder.cpp
@@ -34,6 +36,8 @@ set(Nero_SRCS
 set(Nero_HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Observable.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/Observateur.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroBlockingQueue.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroSystemClock.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroSTC.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroAudioDecoder.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroVideoDecoder.h

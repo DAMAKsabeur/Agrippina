@@ -8,6 +8,7 @@
 #ifndef NEROCONSTANTS_H_
 #define NEROCONSTANTS_H_
 #include "stdint.h"
+#include "sys/types.h"
 #define INTELCE4x00ISMD_IMPL 1
 #define NERO_DEBUG printf
 #define NERO_ERROR printf
@@ -17,6 +18,33 @@
 #define NeroSTC_class  NeroIntelCE4x00STC
 //typedef NeroIntelCE4x00STC NeroSTC_class  
 #endif
+#define NERO_MAXEVENT_DATA 0x0A
+typedef struct  ES_t
+{
+char * buffer ;
+size_t size;
+uint64_t pts;
+bool discontinuity;
+}ES_t;
+
+typedef enum Nero_Event_Liste_t
+{
+    NERO_EVENT_FRAME_FLIPPED = 0x00   ,
+    NERO_EVENT_UNDERFLOW              ,
+    NERO_EVENT_UNDERFLOWRECOVRED      ,
+    NERO_EVENT_PTS_VALUE_EARLY        ,
+    NERO_EVENT_PTS_VALUE_LATE         ,
+    NERO_EVENT_PTS_PTS_VALUE_RECOVERED,
+    NERO_EVENT_LAST
+}Nero_Event_Liste_t;
+
+typedef struct NeroEvents_t
+{
+	Nero_Event_Liste_t header;
+    uint64_t pts;
+    char data[NERO_MAXEVENT_DATA];
+}NeroEvents_t;
+
 typedef enum {
 	NERO_AUDIO_ES_PRIMERY = 0x00,  /** port ID for ES audio             */
     NERO_AUDIO_ES_SECONDARY,       /** port ID for ES audio description */
@@ -26,9 +54,9 @@ typedef enum {
 } Nero_AudioID_t;
 
 typedef enum {
-	NERO_STC_AUDIO_MASTER = 0x00,  /** port ID for ES audio             */
-	NERO_STC_VIDEO_MASTER,         /** port ID for ES audio description */
-	NERO_STC_FREERUN,              /** port ID for UI Sound             */
+	NERO_STC_FREERUN      = 0x00,
+	NERO_STC_AUDIO_MASTER = 0x01,         /** port ID for ES audio             */
+	NERO_STC_VIDEO_MASTER=  0x02,         /** port ID for ES audio description */
 } Nero_stc_type_t;
 typedef enum {
    NERO_CODEC_AUDIO_INVALID = 0x00, /**< - Invalid or Unknown algorithm*/
@@ -65,10 +93,10 @@ typedef enum {
 } Nero_video_codec_t;
 
 typedef enum {
-	NERO_AUDIO_STOP = 0x00,
-	NERO_AUDIO_PAUSE       ,
-    NERO_AUDIO_PLAY        ,
-    NERO_AUDIO_LAST
+	NERO_DECODER_STOP = 0x00,
+	NERO_DECODER_PAUSE      ,
+    NERO_DECODER_PLAY       ,
+    NERO_DECODER_LAST
 } NeroDecoderState_t;
 
 typedef enum {

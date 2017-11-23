@@ -8,41 +8,20 @@ using namespace std;
 
 
 /* public functions */
- /**1st constructor without stc: this shall create an internal STC to play audio in free run mode 
-  * Free run driven clock mode */
  
 NeroAudioDecoder:: NeroAudioDecoder()
 {
 
     internal_clock = true;
-    evt = 0x00;
-    stc =  new NeroSTC();
-    m_NeroAudioDecoder = new NeroAudioDecoder_class(stc);
-    m_NeroAudioDecoder->AddObs(this);
+    m_NeroAudioDecoder = new NeroAudioDecoder_class();
+
 }
 
-/**2end constructor with stc: this shall use passed STC to play audio in stc master mode 
- * stc master */
- 
-NeroAudioDecoder:: NeroAudioDecoder(NeroSTC* m_NeroSTC)
-{
-    internal_clock = false;
-    evt = 0x00;
-    stc = m_NeroSTC;
-    m_NeroAudioDecoder = new NeroAudioDecoder_class(stc);
-    m_NeroAudioDecoder->AddObs(this);
-}
 
 /** audio decoder distructor */
 
 NeroAudioDecoder::~NeroAudioDecoder()
 {
-
-	if (internal_clock == true)
-	{
-		delete stc;
-	}
-	m_NeroAudioDecoder->DelObs(this);
 	delete m_NeroAudioDecoder;
 	m_NeroAudioDecoder = NULL;
 }
@@ -134,30 +113,17 @@ NeroDecoderState_t NeroAudioDecoder::GetState()
 	return(m_NeroAudioDecoder->NeroAudioDecoderGetState());
 }
 
+uint64_t NeroAudioDecoder::GetLastPts()
+{
+    return((uint64_t)m_NeroAudioDecoder->NeroAudioDecoderGetLastPts());
+}
 /* for testing mode */
 /* demux injection mode PES injection */
 int NeroAudioDecoder::Getport()
 {
 	return((int)m_NeroAudioDecoder->NeroAudioDecoderGetport());
 }
-
-Info NeroAudioDecoder::Statut(void) const
+Nero_error_t NeroAudioDecoder::NeroEventWait(NeroEvents_t *event)
 {
-	NERO_DEBUG ("NeroAudioDecoder update status = %d \n",evt);
-	return ((int)evt);
+	return((Nero_error_t)m_NeroAudioDecoder->NeroAudioDecoderEventWait(event));
 }
-
-void NeroAudioDecoder::UpdateStatus()
-{
-	Notify();
-}
-
-void NeroAudioDecoder::Update(const Observable* observable)
-{
-
-	int  evt = observable->Statut();
-	UpdateStatus();
-	NERO_DEBUG ("NeroAudioDecoder update Statut = %d \n",evt);
-
-}
-

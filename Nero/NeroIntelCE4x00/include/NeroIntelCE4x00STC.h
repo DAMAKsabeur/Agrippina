@@ -9,7 +9,8 @@
 #define NEROINTELCE4X00_STC_H_
 #include "NeroConstants.h"
 #include "NeroIntelCE4x00Constants.h"
-
+#include "NeroAudioDecoder.h"
+#include "NeroVideoDecoder.h"
 extern "C"
 {
 #include "ismd_core.h"
@@ -26,24 +27,22 @@ class NeroIntelCE4x00STC{
 public:
 
 NeroIntelCE4x00STC();
-NeroIntelCE4x00STC(uint8_t type);
+NeroIntelCE4x00STC(Nero_stc_type_t SyncMode);
 ~NeroIntelCE4x00STC();
-
-Nero_error_t NeroSTCSetPlayBack();
-nero_clock_handle_t NeroSTCGetClock();
-Nero_error_t NeroSTCSetBaseTime(uint64_t time);
-uint64_t NeroSTCGetBaseTime();
-Nero_stc_type_t NeroSTCGetType();
-Nero_error_t NeroSTCSetType(Nero_stc_type_t stc_type);
+Nero_error_t ConncectSources(NeroAudioDecoder* NeroAudioDecoder_ptr, NeroVideoDecoder* NeroVideoDecoder_ptr);
+Nero_error_t DisconncectSources();
+NeroAudioDecoder* GetAudioDecoder ();
+NeroVideoDecoder* GetVideoDecoder ();
+Nero_error_t SetSyncMode (Nero_stc_type_t SyncMode);
+Nero_stc_type_t GetSyncMode ();
+uint64_t GetLastSyncPts();
+uint64_t last_syc_pts;
 private:
-/* private functions */
 
-Nero_error_t NeroIntelCE4x00STCInvalidateHandles();
-
-/* private variables */
-Nero_stc_type_t Nero_stc_type;
-ismd_clock_t clock_handle;
-ismd_time_t  basetime;
+os_thread_t stc_task ;
+NeroAudioDecoder* m_NeroAudioDecoder_ptr;
+NeroVideoDecoder* m_NeroVideoDecoder_ptr;
+Nero_stc_type_t  m_SyncMode;
 };
 
 #endif /* NEROINTELCE4X00_STC_H_ */

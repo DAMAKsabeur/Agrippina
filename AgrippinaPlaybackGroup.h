@@ -38,7 +38,7 @@
 #include "NeroAudioDecoder.h"
 #include "NeroVideoDecoder.h"
 #include "NeroConstants.h"
-
+#include "NeroSystemClock.h"
 namespace netflix {
 namespace device {
 namespace esplayer {
@@ -94,7 +94,7 @@ private:
     AgrippinaESManager&                    mESManager;
     std::set<AgrippinaESPlayer*>           mStreamPlayers;
     uint32_t mPipelineId;
-    NeroSTC* stc;
+    NeroSTC* m_stc;
     NeroAudioDecoder* m_NeroAudioDecoder;
     NeroVideoDecoder* m_NeroVideoDecoder;
 };

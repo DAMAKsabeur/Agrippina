@@ -21,6 +21,7 @@ set(ISMD_LIBRARIES osal ismd_viddec_v2 ismd_vidpproc ismd_vidrend ismd_vidsink_d
 include_directories(${ISMD_INCLUDE_DIRECTORIES})
 # source file liste
 set(NeroIntelCE4x00_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroIntelCE4x00SystemClock.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroIntelCE4x00AudioProcessor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroIntelCE4x00VideoDecoder.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/NeroIntelCE4x00STC.cpp
@@ -29,6 +30,7 @@ set(NeroIntelCE4x00_SRCS
 # headers file liste
 
 set(NeroIntelCE4x00_HEADERS
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroIntelCE4x00SystemClock.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroIntelCE4x00AudioProcessor.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroIntelCE4x00STC.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/NeroIntelCE4x00AudioDecoder.h

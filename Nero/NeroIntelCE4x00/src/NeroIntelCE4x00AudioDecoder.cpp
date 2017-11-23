@@ -1,50 +1,10 @@
 #include "NeroIntelCE4x00AudioDecoder.h"
+
 using namespace std;
+/*************************************************************************************/
+/********************************private methods**************************************/
+/*************************************************************************************/
 
-/*************************************************************************
- * private:
-**************************************************************************/
-
-extern "C"
-{
-void *aud_evt_handler(void* args)
-{
-	   NeroIntelCE4x00AudioDecoder*  m_NeroIntelCE4x00AudioDecoder = (NeroIntelCE4x00AudioDecoder*)args;
-	   ismd_result_t ismd_ret=ISMD_SUCCESS;
-	   ismd_event_t triggered_event=ISMD_EVENT_HANDLE_INVALID;
-	   int i = 0;
-	   char* event_name = "ERROR : this evt_id is not a registered event !";
-	   while(! m_NeroIntelCE4x00AudioDecoder->aud_evt_handler_thread_exit) {
-	      ismd_ret=ismd_event_wait_multiple(m_NeroIntelCE4x00AudioDecoder->ismd_aud_evt_tab, AUDIO_NB_EVENT_TO_MONITOR, EVENT_TIMEOUT, &triggered_event);
-	      if(ismd_ret!=ISMD_ERROR_TIMEOUT) {
-	         if (ismd_ret!=ISMD_SUCCESS) {
-	            printf("aud event waited failed (%d)\n", ismd_ret);
-	         }
-	         else {
-	           /* printf("--> AUD EVT RECEIVED : %d (%s)\n", triggered_event, dbg_evt(triggered_event, AUDIO_EVT));
-	            if(triggered_event == ISMD_AUDIO_NOTIFY_STREAM_END) {
-	               audio_eos_reached = true;
-	            }*/
-	            ismd_ret=ismd_event_acknowledge(triggered_event);
-	            if (ismd_ret!=ISMD_SUCCESS){
-	               printf("ismd_event_acknowledge failed (%d)\n", ismd_ret);
-	               OS_ASSERT(0);
-	            }
-	         }
-	      }
-	      if(triggered_event !=ISMD_EVENT_HANDLE_INVALID)
-	      {
-            pthread_mutex_lock(&m_NeroIntelCE4x00AudioDecoder->mutex_stock);
-	    	m_NeroIntelCE4x00AudioDecoder->triggered_event = triggered_event;
-	        pthread_mutex_unlock(&m_NeroIntelCE4x00AudioDecoder->mutex_stock);
-	        m_NeroIntelCE4x00AudioDecoder->Notify();
-	      }
-	      usleep(10000);
-	   }
-	   printf("exit aud_evt_handler \n");
-	   return NULL;
-}
-}
 Nero_error_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoderInvalidateHandles()
 {
 
@@ -54,73 +14,103 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoderInvalidateH
     audio_input_port_handle = ISMD_PORT_HANDLE_INVALID;
     audio_processor         = ISMD_DEV_HANDLE_INVALID ;
     audio_output_handle     = ISMD_PORT_HANDLE_INVALID;
-    clock_handle            = ISMD_DEV_HANDLE_INVALID;
-
+    clock_handle            = ISMD_CLOCK_HANDLE_INVALID;
+    AudioDecoderState = NERO_DECODER_LAST;
     return(result);
 
 }
 
-Nero_error_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoderSend_new_segment()
+Nero_error_t  NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_EventSubscribe()
 {
-
-    NERO_AUDIO_NOTICE ("NeroIntelCE4x00AudioDecoderSend_new_segment ... \n");
+    NERO_AUDIO_NOTICE ("NeroIntelCE4x00AudioDecoder_EventSubscribe ... \n");
     Nero_error_t     result = NERO_SUCCESS;
-    ismd_newsegment_tag_t newsegment_data;
-    ismd_buffer_handle_t carrier_buffer;
     ismd_result_t ismd_ret = ISMD_SUCCESS;
+    size_t event = NERO_EVENT_LAST;
+       for(event = NERO_EVENT_FRAME_FLIPPED ;event <NERO_EVENT_LAST;event++) {
+   	        switch(event)
+   	        {
+   	     //*************************************************************************
+   	     // Heartbeat events - one from video and one from audio
+   	     //*************************************************************************   	        }
+	           case NERO_EVENT_FRAME_FLIPPED://-----------------------------------SYNC_IN
+	           {
+                   ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, ISMD_AUDIO_NOTIFY_DATA_RENDERED , &Nero_Events[event]);
+                   if(ismd_ret != ISMD_SUCCESS) {
+                       printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",event, Nero_Events[event], ismd_ret);
+                       assert(0);
+                   }
+                   break;
+               }
+	           case NERO_EVENT_UNDERFLOW:
+	           {
+	               ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, ISMD_AUDIO_NOTIFY_INPUT_EMPTY , &Nero_Events[event]);
+	               if(ismd_ret != ISMD_SUCCESS) {
+                       printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",event, Nero_Events[event], ismd_ret);
+	                   assert(0);
+	               }
+	               break;
+	           }
+	           case NERO_EVENT_UNDERFLOWRECOVRED:
+	           {
+	               ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, ISMD_AUDIO_NOTIFY_INPUT_RECOVERED , &Nero_Events[event]);
+	               if(ismd_ret != ISMD_SUCCESS) {
+                       printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",event, Nero_Events[event], ismd_ret);
+	                   assert(0);
+	               }
+	               break;
+	           }
+	           case NERO_EVENT_PTS_VALUE_EARLY:
+	           {
+	               ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, ISMD_AUDIO_NOTIFY_PTS_VALUE_EARLY , &Nero_Events[event]);
+	               if(ismd_ret != ISMD_SUCCESS) {
+                       printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",event, Nero_Events[event], ismd_ret);
+	                   assert(0);
+	               }
+	               break;
+	           }
+	           case NERO_EVENT_PTS_VALUE_LATE:
+	           {
+	               ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, ISMD_AUDIO_NOTIFY_PTS_VALUE_LATE , &Nero_Events[event]);
+	               if(ismd_ret != ISMD_SUCCESS) {
+                       printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",event, Nero_Events[event], ismd_ret);
+	                   assert(0);
+	               }
+	               break;
+	           }
+	           case NERO_EVENT_PTS_PTS_VALUE_RECOVERED:
+	           {
+	               ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, ISMD_AUDIO_NOTIFY_PTS_VALUE_RECOVERED , &Nero_Events[event]);
+	               if(ismd_ret != ISMD_SUCCESS) {
+                       printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",event, Nero_Events[event], ismd_ret);
+	                   assert(0);
+	               }
+	               break;
+	           }
+	           case NERO_EVENT_LAST:
+	           default:
+	           {
+                  break;
+	           }
 
-    newsegment_data.linear_start = 0;
-    newsegment_data.start = ISMD_NO_PTS;
-    newsegment_data.stop = ISMD_NO_PTS;
-    newsegment_data.requested_rate = 10000;
-    newsegment_data.applied_rate = ISMD_NORMAL_PLAY_RATE;
-    newsegment_data.rate_valid = true;
-
-    _TRY(ismd_ret,result,ismd_buffer_alloc,(0, &carrier_buffer));
-    _TRY(ismd_ret,result ,ismd_tag_set_newsegment,(carrier_buffer, newsegment_data));
-    _TRY(ismd_ret,result, ismd_port_write,(audio_input_port_handle, carrier_buffer));
- error:
-     return (result);
-}
-
-ismd_result_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_subscribe_events()
-{
-   ismd_result_t ismd_ret;
-   int i=0;
-   NERO_AUDIO_NOTICE ("NeroIntelCE4x00AudioDecoder_subscribe_events ...  \n");
-   // subscribe audio events
-   if(AUDIO_NB_EVENT_TO_MONITOR>0) {
-      for(i=0;i<AUDIO_NB_EVENT_TO_MONITOR;i++) {
-    	  printf ("getting notification for event %d \n",aud_evt_to_monitor[i]);
-         ismd_ret = ismd_audio_input_get_notification_event(audio_processor, audio_handle, aud_evt_to_monitor[i], &ismd_aud_evt_tab[i]);
-         if(ismd_ret != ISMD_SUCCESS) {
-            printf("failed at ismd_audio_input_get_notification_event on %d (ismd_evt = %d) : ismd_ret=%d\n",i, aud_evt_to_monitor[i], ismd_ret);
-            assert(0);
-         }
-         //printf("get_notification_event evt %d (%s) OK \n", ismd_aud_evt_tab[i],dbg_evt(ismd_aud_evt_tab[i],AUDIO_EVT));
-      }
-   }
-   return (ismd_ret);
-}
-
-ismd_result_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_unsubscribe_events()
-{
-  ismd_result_t ismd_ret;
-  int i=0;
-
-  if(AUDIO_NB_EVENT_TO_MONITOR>0) {
-     for(i=0;i<AUDIO_NB_EVENT_TO_MONITOR;i++) {
-        ismd_aud_evt_tab[i]=ISMD_EVENT_HANDLE_INVALID;
-        ismd_ret = ismd_event_free(ismd_aud_evt_tab[i]);
-        if(ismd_ret != ISMD_SUCCESS) {
-           printf("failed at ismd_event_free on %d (ismd_evt = %d)\n",i, ismd_aud_evt_tab[i]);
-           assert(0);
-        }
+	        }
      }
-  }
-  return (ismd_ret);
+    return (result);
 }
-
+Nero_error_t  NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_EventUnSubscribe()
+{
+    NERO_AUDIO_NOTICE ("NeroIntelCE4x00AudioDecoder_EventUnSubscribe ... \n");
+    Nero_error_t     result = NERO_SUCCESS;
+    ismd_result_t ismd_ret = ISMD_SUCCESS;
+    size_t event = NERO_EVENT_LAST;
+    for(event=0; event< NERO_EVENT_LAST ;event++) {
+        Nero_Events[event]=ISMD_EVENT_HANDLE_INVALID;
+        ismd_ret = ismd_event_free(Nero_Events[event]);
+        if(ismd_ret != ISMD_SUCCESS) {
+            printf("failed at ismd_event_free on %d (ismd_evt = %d)\n",event, Nero_Events[event]);
+        }
+    }
+    return (result);
+}
 
 ismd_audio_format_t NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder_NERO2ISMD_codeRemap(Nero_audio_codec_t NeroAudioAlgo)
 {
@@ -253,47 +243,9 @@ NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder()
     Nero_error_t     result = NERO_SUCCESS;
     ismd_result_t ismd_ret = ISMD_SUCCESS;
     result = NeroIntelCE4x00AudioDecoderInvalidateHandles();
-    internal_clk = true;
-    ismd_ret = ismd_clock_alloc(ISMD_CLOCK_TYPE_FIXED, &clock_handle);
-    if (ISMD_SUCCESS != ismd_ret)
-    {
-	    result = NERO_ERROR_INTERNAL;
-	}
+    clock_handle = NeroIntelCE4x00SystemClock::aquire();
     audio_processor = (ismd_audio_processor_t)NeroIntelCE4x00AudioProcessor::instance()->GetHandle();
-    aud_evt_to_monitor = {ISMD_AUDIO_NOTIFY_INPUT_FULL, ISMD_AUDIO_NOTIFY_INPUT_EMPTY, ISMD_AUDIO_NOTIFY_DATA_RENDERED };
-    ismd_aud_evt_tab = {0,};
-    triggered_event = 0x00;
-    aud_evt_handler_thread_exit = false;
-    if (pthread_mutex_init(&mutex_stock, NULL) != 0)
-    {
-        result = NERO_ERROR_INTERNAL;
-        NERO_AUDIO_ERROR("mopal_fpout_pdd_data.dev.led_mutex  init failed \n");
-    }
-}
-
-
-/** Nero ISMD Audio decoder constructor */
-NeroIntelCE4x00AudioDecoder::NeroIntelCE4x00AudioDecoder(NeroSTC* NeroSTC_ptr)
-{
-
-    NERO_AUDIO_NOTICE ("NeroIntelCE4x00AudioDecoder creator  ... \n");
-    Nero_error_t     result = NERO_SUCCESS;
-    ismd_result_t ismd_ret = ISMD_SUCCESS;
-    int rc=0;
-    result = NeroIntelCE4x00AudioDecoderInvalidateHandles();
-    internal_clk = false;
-    clock_handle = (ismd_clock_t)NeroSTC_ptr->NeroSTCGetClock();
-    stc = NeroSTC_ptr;
-    audio_processor = (ismd_audio_processor_t)NeroIntelCE4x00AudioProcessor::instance()->GetHandle();
-    aud_evt_to_monitor = {ISMD_AUDIO_NOTIFY_INPUT_FULL, ISMD_AUDIO_NOTIFY_INPUT_EMPTY, ISMD_AUDIO_NOTIFY_DATA_RENDERED };
-    ismd_aud_evt_tab = {0,};
-    triggered_event = 0x00;
-    aud_evt_handler_thread_exit = false;
-    if (pthread_mutex_init(&mutex_stock, NULL) != 0)
-    {
-        result = NERO_ERROR_INTERNAL;
-        NERO_AUDIO_ERROR("mutex_stock  init failed \n");
-    }
+    AudioDecoderState = NERO_DECODER_LAST;
 }
 
 /** Nero ISMD Audio decoder constructor */
@@ -304,18 +256,8 @@ NeroIntelCE4x00AudioDecoder::~NeroIntelCE4x00AudioDecoder()
     Nero_error_t     result = NERO_SUCCESS;
     int rc = 0x00;
     ismd_result_t ismd_ret = ISMD_SUCCESS;
-    aud_evt_handler_thread_exit = true;
-    if(pthread_mutex_destroy(&mutex_stock)!=0)
-    {
-        result = NERO_ERROR_INTERNAL;
-        NERO_AUDIO_ERROR("mutex_stock mutex destruction  fail ... (%d) \n", result);
-    }
-    ismd_ret = ismd_clock_alloc(ISMD_CLOCK_TYPE_FIXED, &clock_handle);
-    if (ISMD_SUCCESS != ismd_ret)
-    {
-	    result = NERO_ERROR_INTERNAL;
-	}
-    stc = NULL;
+    clock_handle = ISMD_CLOCK_HANDLE_INVALID;
+
     result = NeroIntelCE4x00AudioDecoderInvalidateHandles();
 
 }
@@ -328,7 +270,6 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderInit (Nero_audio_codec
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
     int time_valid = 0x01;
-    orginal_clock_time = 0x00;
     Nero_stc_type_t stc_type = NERO_STC_FREERUN;
     ismd_audio_format_t aud_fmt = NeroIntelCE4x00AudioDecoder_NERO2ISMD_codeRemap(NeroAudioAlgo);
     ismd_time_t curr_time = 0x00;
@@ -337,11 +278,18 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderInit (Nero_audio_codec
     audio_output.ch_config = ISMD_AUDIO_STEREO;
     audio_output.out_mode = ISMD_AUDIO_OUTPUT_PCM;
     audio_output.sample_rate = 48000;
-    audio_output.sample_size = 24;
+    audio_output.sample_size = 16;
     audio_output.stream_delay = 0;
     audio_output.ch_map = AUDIO_CHAN_CONFIG_2_CH;
-    //ismd_audio_input_set_passthrough
-    _TRY(ismd_ret,result,ismd_audio_add_input_port,(audio_processor, false, &audio_handle, &audio_input_port_handle));
+
+    ismd_ret = ismd_audio_add_input_port(audio_processor, true, &audio_handle,
+                                             &audio_input_port_handle);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+        NERO_AUDIO_ERROR(" ismd_audio_add_input_port failed \n");
+        goto error;
+    }
+
     _TRY(ismd_ret,result,ismd_audio_input_set_data_format,(audio_processor, audio_handle, aud_fmt));
     _TRY(ismd_ret,result,ismd_audio_input_enable,(audio_processor, audio_handle));
     /* HDMI OUTPUT */
@@ -351,60 +299,32 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderInit (Nero_audio_codec
     _TRY(ismd_ret,result,ismd_audio_output_set_sample_rate,(audio_processor, audio_output_handle, 48000));
     _TRY(ismd_ret,result,ismd_audio_output_set_mode,(audio_processor, audio_output_handle, ISMD_AUDIO_OUTPUT_PCM));
     _TRY(ismd_ret,result,ismd_audio_output_set_external_bit_clock_div,(audio_processor, audio_output_handle, 12));
+
+	ismd_ret = ismd_dev_set_clock(audio_handle, clock_handle);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+        NERO_VIDEO_ERROR(" ismd_vidrend_set_timing_mode failed \n");
+        assert(0);
+    }
+
+    ismd_ret = ismd_clock_get_time(clock_handle, &curr_time);
+    if(ismd_ret != ISMD_SUCCESS) {
+       printf("failed at ismd_clock_get_time\n");
+       assert(0);
+    }
+
+    base_time = curr_time;
+
+    ismd_ret = ismd_dev_set_stream_base_time(audio_handle, curr_time);
+    if(ismd_ret != ISMD_SUCCESS) {
+       printf("failed at ismd_dev_set_stream_base_time, audio_handle\n");
+       assert(0);
+    }
+
     _TRY(ismd_ret,result,ismd_audio_output_enable,(audio_processor, audio_output_handle));
-    _TRY(ismd_ret,result,ismd_dev_set_state,(audio_handle,ISMD_DEV_STATE_PAUSE));
    /*_TRY(ismd_ret,result, assign_audio_clock,());*/
-
-    _TRY(ismd_ret,result,ismd_dev_set_clock,(audio_handle, clock_handle));
-   /*_TRY(ismd_ret,result, connect_audio_pipeline,());*/
-
-   /*_TRY(ismd_ret,result, configure_audio_clocks,(0, 1));*/
-	_TRY(ismd_ret,result,ismd_clock_get_time,(clock_handle, &curr_time));
-    stc_type = stc->NeroSTCGetType();
-        switch(stc_type)
-        {
-            case NERO_STC_VIDEO_MASTER:
-            {
-            	/*_TRY(ismd_ret,result,ismd_clock_get_time,(clock_handle, &curr_time));*/
-            	curr_time = stc->NeroSTCGetBaseTime();
-            	_TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-            	 _TRY(ismd_ret,result,ismd_dev_set_stream_base_time,(audio_handle, curr_time));
-            }
-            case NERO_STC_AUDIO_MASTER:
-            case NERO_STC_FREERUN:
-            default:
-            {
-            	curr_time =0x00;
-            	_TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-            	 result = stc->NeroSTCSetBaseTime(curr_time);
-            	 _TRY(ismd_ret,result,ismd_dev_set_stream_base_time,(audio_handle, curr_time));
-            	 break;
-            }
-        }
-        _TRY(ismd_ret,result ,ismd_dev_set_state,(audio_handle,ISMD_DEV_STATE_PAUSE));
-    /*if(time_valid)
-    {
-         _TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-	}
-    else
-    {
-	    _TRY(ismd_ret,result,ismd_clock_get_time,(clock_handle, &curr_time));
-	}
-
-    _TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-   _TRY(ismd_ret,result,ismd_dev_set_stream_base_time,(audio_handle, curr_time));
-   /*_TRY(ismd_ret,result, start_audio_pipeline,());    */
-
-   result = NeroAudioDecoderPlay();
-   if (NERO_SUCCESS !=result)
-   {
-	   NERO_AUDIO_ERROR ("NeroAudioDecoderPlay fail !!! \n");
-	   goto error;
-   }
-   result = NeroIntelCE4x00AudioDecoderSend_new_segment();
-
-   _TRY(ismd_ret,result ,NeroIntelCE4x00AudioDecoder_subscribe_events,());
-   os_thread_create(&aud_evt_handler_thread, aud_evt_handler, this, 0, 0, "aud_evt_handler thread");
+    /* clock setting */
+    NeroIntelCE4x00AudioDecoder_EventSubscribe();
 error:
     return (result);
 
@@ -417,13 +337,6 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderReconfigure(Nero_audio
     NERO_AUDIO_NOTICE ("NeroAudioDecoderReconfigure ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    ismd_audio_format_t aud_fmt = NeroIntelCE4x00AudioDecoder_NERO2ISMD_codeRemap(NeroAudioAlgo);
-    NERO_AUDIO_NOTICE ("NeroAudioDecoderReconfigure ...(%d) \n",aud_fmt);
-    _TRY(ismd_ret, result ,ismd_dev_set_state,(audio_handle, ISMD_DEV_STATE_STOP));
-    _TRY(ismd_ret, result ,ismd_dev_flush,(audio_handle));
-    _TRY(ismd_ret, result ,ismd_audio_input_set_data_format,(audio_processor, audio_handle, aud_fmt));
-    //Set up the input again with the new info.
-    _TRY(ismd_ret, result ,ismd_dev_set_state,(audio_handle, ISMD_DEV_STATE_PLAY));
 
 error:
     return(result);
@@ -436,6 +349,7 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderUnInit()
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
     /*_TRY(ismd_ret,result,pause_audio_pipeline,());*/
+    NeroIntelCE4x00AudioDecoder_EventUnSubscribe();
     result = NeroAudioDecoderPause();
     if (NERO_SUCCESS !=result)
     {
@@ -450,7 +364,7 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderUnInit()
         goto error;
     }
 
-	_TRY(ismd_ret,result ,NeroIntelCE4x00AudioDecoder_unsubscribe_events,());
+	/*_TRY(ismd_ret,result ,NeroIntelCE4x00AudioDecoder_unsubscribe_events,());*/
     /*_TRY(ismd_ret,result,flush_audio_pipeline,());*/
     result = NeroAudioDecoderFlush();
     if (NERO_SUCCESS !=result)
@@ -466,8 +380,8 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderUnInit()
     	NERO_AUDIO_ERROR ("NeroAudioDecoderClose fail !!! \n");
         goto error;
     }
-    result = NeroIntelCE4x00AudioDecoderInvalidateHandles();
 
+    result = NeroIntelCE4x00AudioDecoderInvalidateHandles();
 error:
     return(result);
 
@@ -485,7 +399,7 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderClose()
     _TRY(ismd_ret,result, ismd_dev_close,(audio_handle));
 
 
-    AudioDecoderState = NERO_AUDIO_LAST;
+    AudioDecoderState = NERO_DECODER_LAST;
 
 error:
      return (result);
@@ -514,10 +428,13 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderStop()
     NERO_AUDIO_NOTICE ("NeroAudioDecoderStop ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    _TRY(ismd_ret, result ,ismd_dev_set_state,(audio_handle, ISMD_DEV_STATE_STOP));
-
+    if(AudioDecoderState != NERO_DECODER_STOP)
+    {
+        _TRY(ismd_ret, result ,ismd_dev_set_state,(audio_handle, ISMD_DEV_STATE_STOP));
+        AudioDecoderState = NERO_DECODER_STOP;
+    }
 error:
-    AudioDecoderState = NERO_AUDIO_STOP;
+
     return (result);
 }
 
@@ -529,17 +446,12 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderPause()
     NERO_AUDIO_NOTICE ("NeroAudioDecoderPause ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    Nero_stc_type_t stc_type = stc->NeroSTCGetType();
-    _TRY(ismd_ret, result ,ismd_dev_set_state,(audio_handle, ISMD_DEV_STATE_PAUSE));
-    _TRY(ismd_ret,result, ismd_clock_get_time,(clock_handle, &orginal_clock_time));
-    _TRY(ismd_ret,result ,ismd_dev_get_stream_base_time,(audio_handle, &original_base_time));
-    if(stc_type == NERO_STC_AUDIO_MASTER)
+    if (AudioDecoderState !=NERO_DECODER_PAUSE)
     {
-    	stc->NeroSTCSetBaseTime(original_base_time);
+        _TRY(ismd_ret, result ,ismd_dev_set_state,(audio_handle, ISMD_DEV_STATE_PAUSE));
+
+        AudioDecoderState = NERO_DECODER_PAUSE;
     }
-
-    AudioDecoderState = NERO_AUDIO_PAUSE;
-
 error:
 
     return (result);
@@ -552,32 +464,25 @@ Nero_error_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderPlay()
 
     NERO_AUDIO_NOTICE ("NeroAudioDecoderPlay ... \n");
     Nero_error_t result = NERO_SUCCESS;
+
     ismd_result_t ismd_ret;
-    Nero_stc_type_t stc_type = stc->NeroSTCGetType();
-
-
-    ismd_dev_state_t state;
-   _TRY(ismd_ret,result, ismd_dev_get_state,(audio_handle,&state));
-    if(state != ISMD_DEV_STATE_PAUSE)
+    if ((AudioDecoderState != NERO_DECODER_PLAY))
     {
-       _TRY(ismd_ret,result ,ismd_dev_set_state,(audio_handle,ISMD_DEV_STATE_PAUSE));
+        base_time = NeroIntelCE4x00SystemClock::GetBaseTime();
+        //set modules with new base_time
+        ismd_ret = ismd_dev_set_stream_base_time(audio_handle, base_time);
+        if(ismd_ret != ISMD_SUCCESS) {
+           printf("failed at ismd_dev_set_stream_base_time, audio_handle\n");
+        }
+
+       _TRY(ismd_ret,result ,ismd_dev_set_state,(audio_handle,ISMD_DEV_STATE_PLAY));
+
+       AudioDecoderState = NERO_DECODER_PLAY;
     }
-   _TRY(ismd_ret,result, ismd_clock_get_time,(clock_handle, &curr_clock));
-   if(stc_type == NERO_STC_VIDEO_MASTER)
-   {
-       original_base_time=stc->NeroSTCGetBaseTime();
-   }
-   original_base_time += curr_clock-orginal_clock_time+3000;
-   _TRY(ismd_ret, result, ismd_dev_set_stream_base_time,(audio_handle,original_base_time));
-
-   _TRY(ismd_ret,result ,ismd_dev_set_state,(audio_handle,ISMD_DEV_STATE_PLAY));
-   AudioDecoderState = NERO_AUDIO_PLAY;
-
 error:
     return (result);
 
 }
-
 Nero_error_t  NeroIntelCE4x00AudioDecoder::NeroAudioDecoderFeed (uint8_t* payload, size_t payload_size, uint64_t nrd_pts, bool discontinuity)
 {
 	Nero_error_t result = NERO_SUCCESS;
@@ -643,8 +548,7 @@ Nero_error_t  NeroIntelCE4x00AudioDecoder::NeroAudioDecoderFeed (uint8_t* payloa
         }
 
         inject_size += temp_size;
-    } while ( inject_size < payload_size );
-
+    } while ( inject_size < payload_size);
 error:
 	return (result);
 }
@@ -653,6 +557,33 @@ NeroDecoderState_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderGetState()
 {
     NERO_AUDIO_NOTICE ("NeroAudioDecoderGetState ... \n");
     return (AudioDecoderState);
+}
+
+uint64_t NeroIntelCE4x00AudioDecoder::NeroAudioDecoderGetLastPts()
+{
+	/*NERO_VIDEO_NOTICE ("NeroAudioDecoderGetLastPts  ... \n");*/
+	ismd_result_t            ismd_ret;
+	ismd_pts_t                           audio_pts=0x00;
+	ismd_audio_stream_position_info_t    audio_position;
+	ismd_ret = ismd_audio_input_get_stream_position(audio_processor, audio_handle, &audio_position);
+    if(ismd_ret == ISMD_ERROR_NO_DATA_AVAILABLE) {
+    	NERO_AUDIO_ERROR("failed at ismd_audio_input_get_stream_position (%d)\n", ismd_ret);
+    	audio_pts = 0x00;
+    }
+    else if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_AUDIO_ERROR("failed at ismd_audio_input_get_stream_position (%d)\n", ismd_ret);
+    	audio_pts = 0x00;
+    }
+    else {
+    	audio_pts = (audio_position.segment_time/90LL);
+        if (audio_pts >= 0xFFFFFFFF)
+        {
+        	audio_pts=0x00;
+        }
+    }
+    NERO_AUDIO_ERROR ("audio_pts = %d  ... \n",audio_pts);
+error:
+    return((uint64_t)audio_pts);
 }
 
 
@@ -664,14 +595,81 @@ int NeroIntelCE4x00AudioDecoder::NeroAudioDecoderGetport()
 
 }
 
-Info NeroIntelCE4x00AudioDecoder::Statut(void) const
+Nero_error_t   NeroIntelCE4x00AudioDecoder::NeroAudioDecoderEventWait(NeroEvents_t *event)
 {
+    ismd_event_t event_got;
+    ismd_result_t ret_ismd = ISMD_SUCCESS;
+	Nero_error_t result = NERO_SUCCESS;
+	size_t evt = NERO_EVENT_LAST;
 
-	int evt = 0x00;
-    pthread_mutex_lock((pthread_mutex_t*)&mutex_stock);
-    evt = triggered_event;
-    pthread_mutex_unlock((pthread_mutex_t*)&mutex_stock);
-    NERO_AUDIO_NOTICE("NeroIntelCE4x00AudioDecoder :: triggered_event = %d \n",evt);
-	return ((int)evt);
+    ret_ismd = ismd_event_wait_multiple(Nero_Events,NERO_EVENT_LAST,NERO_EVENT_TIMEOUT, &event_got);
+
+    if (ret_ismd == ISMD_ERROR_TIMEOUT) {
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    for (evt = NERO_EVENT_FRAME_FLIPPED ; evt < NERO_EVENT_LAST;evt++)
+    {
+        if (Nero_Events[evt]==event_got)
+        {
+            switch (evt)
+            {
+                case NERO_EVENT_FRAME_FLIPPED:
+                {
+                	printf ("A- NERO_EVENT_FRAME_FLIPPED .. \n");
+                    event->pts = NeroAudioDecoderGetLastPts();
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_UNDERFLOW:
+                {
+                	printf ("A- NERO_EVENT_UNDERFLOW .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_UNDERFLOWRECOVRED:
+                {
+                	printf ("A-NERO_EVENT_UNDERFLOWRECOVRED .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_PTS_VALUE_EARLY:
+                {
+                	printf ("A-NERO_EVENT_PTS_VALUE_EARLY .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_PTS_VALUE_LATE:
+                {
+                	printf ("A-NERO_EVENT_PTS_VALUE_LATE .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_PTS_PTS_VALUE_RECOVERED:
+                {
+                	printf ("A-NERO_EVENT_PTS_PTS_VALUE_RECOVERED .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_LAST:
+                default:
+                    printf("A- Unknown event %d\n", evt);
+                    event->header =(Nero_Event_Liste_t)evt;
+                    break;
+            }
+
+            /* acknowledge the event */
+            ret_ismd = ismd_event_acknowledge(event_got);
+            if (ret_ismd!=ISMD_SUCCESS)
+            {
+                printf("Failed at ismd_event_acknowledge \n");
+                result = NERO_ERROR_INTERNAL;
+                goto exit;
+            }
+            break;
+        }
+    }
+exit:
+	return (NERO_SUCCESS);
 }
-

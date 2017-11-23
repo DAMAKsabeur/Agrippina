@@ -75,6 +75,7 @@ AgrippinaVideoESPlayer::~AgrippinaVideoESPlayer()
     setCloseThreadsFlag();
     (void)m_NeroVideoDecoder->UnInit();
     m_NeroVideoDecoder = NULL;
+    m_stc = NULL;
 }
 
 static const Rect zeroRect = {0, 0, 0, 0};
@@ -107,7 +108,7 @@ AgrippinaVideoESPlayer::AgrippinaVideoESPlayer() : mCurrent3DFormat(NOT_3D),
     }
 }
 
-AgrippinaVideoESPlayer::AgrippinaVideoESPlayer(NeroVideoDecoder* NeroVideoDecoder_ptr) : mCurrent3DFormat(NOT_3D),
+AgrippinaVideoESPlayer::AgrippinaVideoESPlayer(NeroVideoDecoder* NeroVideoDecoder_ptr,NeroSTC* stc_ptr) : mCurrent3DFormat(NOT_3D),
                                              mCurrentVideoWindow(zeroRect),
                                              mCurrentAlpha(0.0),
                                              mCurrentZOrder(UINT_MAX),
@@ -134,6 +135,7 @@ AgrippinaVideoESPlayer::AgrippinaVideoESPlayer(NeroVideoDecoder* NeroVideoDecode
         mFileDumpingOnlyGop = true;
     }
     m_NeroVideoDecoder = NeroVideoDecoder_ptr;
+    m_stc =stc_ptr;
 }
 
 
@@ -201,11 +203,56 @@ NFErr AgrippinaVideoESPlayer::init(const struct StreamPlayerInitData& initData,
 
     // Start the decoder and render threads.
     mVideoDecoderThread.reset(
-        new DeviceThread(*this, &AgrippinaESPlayer::decoderTask, &THREAD_REFERENCE_DPI_VIDEO_DECODER));
+        new DeviceThread(*this, &AgrippinaESPlayer::DecoderTask, &THREAD_REFERENCE_DPI_VIDEO_DECODER));
+    mVideoEventThread.reset(
+        new DeviceThread(*this, &AgrippinaESPlayer::EventTask, &THREAD_REFERENCE_DPI_VIDEO_EVENT));
     return err;
 }
+void AgrippinaVideoESPlayer::EventHandling(NeroEvents_t *event)
+{
+    switch (event->header)
+    {
+         case     NERO_EVENT_FRAME_FLIPPED :
+        {
+    	    NTRACE(TRACE_MEDIAPLAYBACK ,"NERO_EVENT_FRAME_FLIPPED ...");
+    	    mCallback->updatePlaybackPosition(event->pts);
+        break;
+        }
+        case     NERO_EVENT_UNDERFLOW     :
+        {
+    	    NTRACE(TRACE_MEDIAPLAYBACK ,"NERO_EVENT_UNDERFLOW ...");
+    	    break;
+        }
+        case     NERO_EVENT_UNDERFLOWRECOVRED      :
+        {
+    	    NTRACE(TRACE_MEDIAPLAYBACK ,"NERO_EVENT_OVERFLOW ...");
+    	    break;
+        }
+        case     NERO_EVENT_LAST          :
+        default:
+        {
+            NTRACE(TRACE_MEDIAPLAYBACK ,"NERO_EVENT_LAST ERROR");
+    	    break;
+        }
+    }
+}
 
-void AgrippinaVideoESPlayer::decoderTask()
+void AgrippinaVideoESPlayer::EventTask()
+{
+    const Time EVENT_TASK_WAIT_TIME(100);
+    NeroEvents_t event;
+
+    while(closeThreadsFlagIsSet() == false)
+    {
+        if (m_NeroVideoDecoder->NeroEventWait(&event) == NERO_SUCCESS)
+        {
+        	EventHandling(&event);
+        }
+        Thread::sleep(EVENT_TASK_WAIT_TIME);
+    }
+}
+
+void AgrippinaVideoESPlayer::DecoderTask()
 {
     static const Time WAIT_FOR_VIDEO_FRAME_BUFFER(10);
     static const Time WAIT_FOR_VIDEO_DATA(100);
@@ -217,6 +264,7 @@ void AgrippinaVideoESPlayer::decoderTask()
 
     while(closeThreadsFlagIsSet() == false)
     {
+
         if(mIsFlushing)
         {
             {
@@ -370,7 +418,7 @@ void AgrippinaVideoESPlayer::decoderTask()
 
             // Report that a frame was decoded or skipped and report whether there were any non-fatal errors.
             //reportDecodeOutcome(mVideoDecoder->getStatsCounter());
-            mCallback->updatePlaybackPosition(m_NeroVideoDecoder->GetLastPts());
+
         }
     }
 }
@@ -424,8 +472,7 @@ void AgrippinaVideoESPlayer::flush()
     // Not implemented.  Video is only flushed via a flush on the entire
     // playback group.
 
-    beginFlush();
-    endFlush();
+    (void)m_NeroVideoDecoder->Flush();
 }
 
 void AgrippinaVideoESPlayer::beginFlush()

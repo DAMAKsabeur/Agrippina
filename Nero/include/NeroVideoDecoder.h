@@ -8,7 +8,6 @@
 #ifndef NERO_VIDEO_DECODER_H_
 #define NERO_VIDEO_DECODER_H_
 #include "NeroConstants.h"
-#include "NeroSTC.h"
 #include "INeroDecoder.h"
 #include "NeroIntelCE4x00VideoDecoder.h"
 
@@ -22,7 +21,6 @@ using namespace std;
 class NeroVideoDecoder : INeroDecoder{
 public:
 NeroVideoDecoder();
-NeroVideoDecoder(NeroSTC* NeroSTC_ptr);
 ~NeroVideoDecoder();
 
 Nero_error_t SetupPlane();
@@ -42,7 +40,8 @@ virtual uint64_t GetLastPts();
 virtual NeroDecoderState_t GetState();
 /* for testing */
 virtual int Getport();
-virtual void Update(const Observable* observable);
+virtual Nero_error_t NeroEventWait(NeroEvents_t *event);
+NeroBlockingQueue VideoESQueue;
 private:
 /* private functions */
 
@@ -50,6 +49,5 @@ private:
 
 NeroVideoDecoder_class* m_NeroVideoDecoder;
 bool internal_clock;
-NeroSTC* stc;
 };
 #endif /* NERO_VIDEO_DECODER_H_ */

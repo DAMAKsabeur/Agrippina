@@ -63,7 +63,8 @@ public:
 
 
     // Methods overridden by audio and video players
-    virtual void decoderTask() = 0;
+    virtual void DecoderTask() = 0;
+    virtual void EventTask() = 0;
     virtual bool inputsAreExhausted() = 0;
     virtual void beginFlush() = 0;
     virtual void endFlush() = 0;

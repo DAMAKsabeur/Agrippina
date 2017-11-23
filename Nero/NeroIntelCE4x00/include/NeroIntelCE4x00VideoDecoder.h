@@ -8,10 +8,10 @@
 #ifndef NEROINTELCE4x00_VIDEO_DECODER_H_
 #define NEROINTELCE4x00_VIDEO_DECODER_H_
 #include "NeroConstants.h"
-
+#include "NeroBlockingQueue.h"
 #include "NeroIntelCE4x00Constants.h"
-#include "NeroSTC.h"
-#include "Observable.h"
+#include "NeroIntelCE4x00SystemClock.h"
+/*#include "Observable.h"*/
 extern "C"
 {
 #include "osal.h"
@@ -29,27 +29,20 @@ using namespace std;
 
 #define PTS_START_VALUE 0
 #define INPUT_BUF_SIZE (32*1024) /* inject up to 32K of Video data per buffer*/
+// Video Player Settings
+#define REN_SCREEN_PAR_X              1; // Screen Pixel Aspect Ratio
+#define REN_SCREEN_PAR_Y              1; // Screen Pixel Aspect Ratio
 
-//*** VIDDEC ***
-#define VIDDEC_NB_EVENT_TO_MONITOR 0x04
+#define VIDEO_REN_SCREEN_WIDTH              720;
+#define VIDEO_REN_SCREEN_HEIGHT             480;
 
-//*** VIDREND ***
-#define VIDREND_NB_EVENT_TO_MONITOR 0x07
-
-#define EVENT_TIMEOUT         0x0A
-#define VIDEO_NB_EVENT_TO_MONITOR    (VIDDEC_NB_EVENT_TO_MONITOR+VIDREND_NB_EVENT_TO_MONITOR)
-class NeroIntelCE4x00VideoDecoder  : public Observable {
+#define PIXEL_FORMAT_NONE            0;
+#define VIDEO_REN_MIN_FRAME_BUFFERS  2;
+class NeroIntelCE4x00VideoDecoder /* : public Observable*/ {
 	
 public:
-bool vid_evt_handler_thread_exit;
-ismd_event_t ismd_vid_evt_tab[VIDEO_NB_EVENT_TO_MONITOR];
-ismd_viddec_event_t viddec_evt_to_monitor [VIDDEC_NB_EVENT_TO_MONITOR];
-ismd_vidrend_event_type_t vidrend_evt_to_monitor[VIDREND_NB_EVENT_TO_MONITOR];
-ismd_event_t triggered_event;
-pthread_mutex_t mutex_stock;
-int nb_vid_evt;
+
 NeroIntelCE4x00VideoDecoder();
-NeroIntelCE4x00VideoDecoder(NeroSTC* NeroSTC_ptr);
 ~NeroIntelCE4x00VideoDecoder();
 
 Nero_error_t   NeroVideoDecoderSetupPlane();
@@ -66,43 +59,51 @@ Nero_error_t   NeroVideoDecoderPlay();
 Nero_error_t   NeroVideoDecoderFeed (uint8_t* payload, size_t payload_size, uint64_t nrd_pts, bool discontinuity);
 uint64_t NeroVideoDecoderGetLastPts();
 NeroDecoderState_t NeroVideoDecoderGetState();
-
 /** for testing to be used for PES injection */
 int            NeroVideoDecoderGetport();
-/** to be checked observer pattern*/
-void Change(int valeur);
-Info Statut(void) const;
+Nero_error_t   NeroVideoDecoderEventWait(NeroEvents_t *event);
 /*********************/
 private:
 /* private functions */
+Nero_error_t  NeroIntelCE4x00VideoDecoder_EventSubscribe();
+Nero_error_t  NeroIntelCE4x00VideoDecoder_EventUnSubscribe();
 ismd_clock_t NeroIntelCE4x00VideoDecoderCreateInternalClock();
 Nero_error_t NeroIntelCE4x00VideoDecoderInvalidateHandles();
 Nero_error_t NeroIntelCE4x00VideoDecoderSend_new_segment();
 ismd_codec_type_t NeroIntelCE4x00VideoDecoder_NERO2ISMD_codeRemap(Nero_video_codec_t NeroVideoAlgo);
 
-ismd_result_t NeroIntelCE4x00VideoDecoder_subscribe_events();
-ismd_result_t NeroIntelCE4x00VideoDecoder_unsubscribe_events();
-
 /* private variables */
 
+/* graphical data */
+gdl_boolean_t              is_scaling_enabled;
+gdl_plane_id_t             layer;
+gdl_display_info_t         display;
+gdl_rectangle_t            rect;
+uint8_t                    alpha;
+
+/* video data */
+os_thread_t VideoDecoderTask ;
 NeroDecoderState_t DecoderState;
 /* ismd handles*/
 ismd_time_t original_base_time;
 ismd_time_t orginal_clock_time;
 ismd_time_t curr_clock;
+ismd_time_t  curr_time;
+NeroDecoderState_t     VideoDecoderState;
 bool internal_clk;
+/* video device handles */
 ismd_dev_t viddec_handle;
 ismd_dev_t vidpproc_handle;
 ismd_dev_t vidrend_handle;
-ismd_vidsink_dev_t vidsink_handle;
-ismd_port_handle_t viddec_input_port_handle;
-ismd_port_handle_t viddec_output_port_handle;
-ismd_port_handle_t vidpproc_input_port_handle;
-gdl_plane_id_t layer;
-
+/* video ports handles */
+ismd_port_handle_t viddec_input;
+ismd_port_handle_t viddec_output;
+ismd_port_handle_t vidpproc_input;
+ismd_port_handle_t vidpproc_output;
+ismd_port_handle_t vidrend_input;
+ismd_buffer_handle_t     buffer;
 ismd_clock_t    clock_handle;
-NeroSTC* stc;
-os_thread_t vid_evt_handler_thread;
+ismd_event_t                Nero_Events[NERO_EVENT_LAST];
 };
 
 #endif /* NEROINTELCE4x00_VIDEO_DECODER_H_ */

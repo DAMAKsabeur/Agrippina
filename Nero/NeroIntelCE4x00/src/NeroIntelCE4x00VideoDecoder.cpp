@@ -2,50 +2,64 @@
 
 using namespace std;
 
+
 /*************************************************************************
  * private:
 **************************************************************************/
-
-extern "C"
+Nero_error_t  NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder_EventSubscribe()
 {
-void *vid_evt_handler(void* args)
-{
-	NeroIntelCE4x00VideoDecoder*  m_NeroIntelCE4x00VideoDecoder = (NeroIntelCE4x00VideoDecoder*)args;
-	   ismd_result_t ismd_ret=ISMD_SUCCESS;
-	   ismd_event_t triggered_event=ISMD_EVENT_HANDLE_INVALID;
+    NERO_AUDIO_NOTICE ("NeroIntelCE4x00VideoDecoder_EventSubscribe ... \n");
+    Nero_error_t     result = NERO_SUCCESS;
+    size_t event = NERO_EVENT_LAST;
+    ismd_result_t ismd_ret = ISMD_SUCCESS;
+    for (event =NERO_EVENT_FRAME_FLIPPED ; event < NERO_EVENT_LAST ; event++)
+    {
+        switch(event) {
+           case NERO_EVENT_FRAME_FLIPPED://-----------------------------------SYNC_IN
+              ismd_ret = ismd_vidrend_get_frame_flipped_event(vidrend_handle, &Nero_Events[event]);
+              if(ismd_ret != ISMD_SUCCESS) {
+                 printf("failed at ismd_vidrend_get_frame_flipped_event\n");
+                 assert(0);
+              }
+              break;
 
-	   while(! m_NeroIntelCE4x00VideoDecoder->vid_evt_handler_thread_exit) {
-	      ismd_ret=ismd_event_wait_multiple(m_NeroIntelCE4x00VideoDecoder->ismd_vid_evt_tab, m_NeroIntelCE4x00VideoDecoder->nb_vid_evt, EVENT_TIMEOUT, &triggered_event);
-	      if(ismd_ret!=ISMD_ERROR_TIMEOUT) {
-	         if (ismd_ret!=ISMD_SUCCESS) {
-	            printf("vid event waited failed (%d)\n", ismd_ret);
-	         }
-	         else {
-	            //printf("\t--> VID EVT RECEIVED : %d (%s)\n", triggered_event, dbg_evt(triggered_event, VIDEO_EVT));
-	            //if(triggered_event == ISMD_VIDREND_EVENT_TYPE_EOS) {
-	            //   video_eos_reached = true;
-	           // }
-	            ismd_ret=ismd_event_acknowledge(triggered_event);
-	            if (ismd_ret!=ISMD_SUCCESS){
-	               printf("ismd_event_acknowledge failed (%d)\n", ismd_ret);
-	               OS_ASSERT(0);
-	            }
-	         }
-	      }
-	      if(triggered_event !=ISMD_EVENT_HANDLE_INVALID)
-	      {
-	    	pthread_mutex_lock(&m_NeroIntelCE4x00VideoDecoder->mutex_stock);
-	    	m_NeroIntelCE4x00VideoDecoder->triggered_event = triggered_event;
-	    	pthread_mutex_unlock(&m_NeroIntelCE4x00VideoDecoder->mutex_stock);
-	        m_NeroIntelCE4x00VideoDecoder->Notify();
+           case NERO_EVENT_UNDERFLOW:
+              ismd_ret = ismd_vidrend_get_underflow_event(vidrend_handle, &Nero_Events[event]);
+              if(ismd_ret != ISMD_SUCCESS) {
+                 printf("failed at ismd_vidrend_get_underflow_event\n");
+                 assert(0);
+              }
+              break;
 
+           case NERO_EVENT_UNDERFLOWRECOVRED :
+              ismd_ret = ismd_vidrend_get_underflow_recovered_event(vidrend_handle, &Nero_Events[event]);
+              if(ismd_ret != ISMD_SUCCESS) {
+                 printf("failed at ismd_vidrend_get_underflow_recovered_event  \n");
+                 assert(0);
+              }
+              break;
+              default : printf("The vidrend event %d can not be subscribed yet \n", Nero_Events[event]);
+        }
+     }
 
-	      }
-	      usleep(10000);
-	   }
-	   printf("exit vid_evt_handler \n");
-	   return NULL;
+    return (result);
 }
+Nero_error_t  NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder_EventUnSubscribe()
+{
+    NERO_AUDIO_NOTICE ("NeroIntelCE4x00VideoDecoder_EventUnSubscribe ... \n");
+    Nero_error_t     result = NERO_SUCCESS;
+    size_t event = NERO_EVENT_LAST;
+    ismd_result_t ismd_ret = ISMD_SUCCESS;
+    for(event =NERO_EVENT_FRAME_FLIPPED ;event < NERO_EVENT_LAST; event++)
+    {
+        Nero_Events[event]=ISMD_EVENT_HANDLE_INVALID;
+        ismd_ret = ismd_event_free(Nero_Events[event]);
+        if(ismd_ret != ISMD_SUCCESS)
+        {
+            printf("failed at ismd_event_free on %d (ismd_evt = %d)\n",event, Nero_Events[event]);
+        }
+    }
+    return (result);
 }
 
 Nero_error_t NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoderInvalidateHandles()
@@ -54,15 +68,17 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoderInvalidateH
     NERO_VIDEO_NOTICE ("NeroIntelCE4x00VideoDecoderInvalidateHandles ... \n");
     Nero_error_t     result = NERO_SUCCESS;
     ismd_result_t ismd_ret = ISMD_SUCCESS;
-    clock_handle    = ISMD_DEV_HANDLE_INVALID;
+    clock_handle    = ISMD_CLOCK_HANDLE_INVALID;
     viddec_handle   = ISMD_DEV_HANDLE_INVALID;
     vidpproc_handle = ISMD_DEV_HANDLE_INVALID;
     vidrend_handle  = ISMD_DEV_HANDLE_INVALID;
-    vidsink_handle  = ISMD_DEV_HANDLE_INVALID;
-    viddec_input_port_handle   = ISMD_PORT_HANDLE_INVALID;
-    viddec_output_port_handle  = ISMD_PORT_HANDLE_INVALID;
-    vidpproc_input_port_handle = ISMD_PORT_HANDLE_INVALID;
 
+    viddec_input= ISMD_PORT_HANDLE_INVALID;
+    viddec_output= ISMD_PORT_HANDLE_INVALID;
+    vidpproc_input= ISMD_PORT_HANDLE_INVALID;
+    vidpproc_output= ISMD_PORT_HANDLE_INVALID;
+    vidrend_input= ISMD_PORT_HANDLE_INVALID;
+    VideoDecoderState = NERO_DECODER_LAST;
     return(result);
 
 }
@@ -112,108 +128,6 @@ ismd_codec_type_t NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder_NERO2
 
 }
 
-Nero_error_t NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoderSend_new_segment()
-{
-
-    NERO_VIDEO_NOTICE ("NeroIntelCE4x00VideoDecoderSend_new_segment ... \n");
-    Nero_error_t     result = NERO_SUCCESS;
-
-    ismd_newsegment_tag_t newsegment_data;
-    ismd_buffer_handle_t carrier_buffer;
-    ismd_result_t ismd_ret;
-
-    newsegment_data.linear_start = 0;
-    newsegment_data.start = ISMD_NO_PTS;
-    newsegment_data.stop = ISMD_NO_PTS;
-    newsegment_data.requested_rate = 10000;
-    newsegment_data.applied_rate = ISMD_NORMAL_PLAY_RATE;
-    newsegment_data.rate_valid = true;
-
-    _TRY(ismd_ret,result,ismd_buffer_alloc,(0, &carrier_buffer));
-    _TRY(ismd_ret,result,ismd_tag_set_newsegment,(carrier_buffer, newsegment_data));
-    _TRY(ismd_ret,result,ismd_port_write,(viddec_input_port_handle, carrier_buffer));
-error:
-     return (result);
-}
-
-ismd_result_t NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder_subscribe_events()
-{
-   ismd_result_t ismd_ret;
-   int i=0;
-   NERO_AUDIO_NOTICE ("NeroIntelCE4x00VideoDecoder_subscribe_events ...  \n");
-   // subscribe video events
-   if(VIDEO_NB_EVENT_TO_MONITOR>0) {
-
-      // viddec events
-      for(i=0;i<VIDDEC_NB_EVENT_TO_MONITOR;i++) {
-         ismd_ret = ismd_viddec_get_event(viddec_handle, viddec_evt_to_monitor[i], &ismd_vid_evt_tab[nb_vid_evt++]);
-         if(ismd_ret != ISMD_SUCCESS) {
-           printf("failed at ismd_viddec_get_event on %d (ismd_evt = %d) : ismd_ret = %d\n",i, viddec_evt_to_monitor[i], ismd_ret);
-         }
-      }
-
-      // vidrend events
-      for(i=0;i<VIDREND_NB_EVENT_TO_MONITOR;i++) {
-         switch(vidrend_evt_to_monitor[i]) {
-
-            case ISMD_VIDREND_EVENT_TYPE_FRAME_FLIPPED: //-----------------------------------SYNC_IN
-               ismd_ret = ismd_vidrend_get_frame_flipped_event(vidrend_handle, &ismd_vid_evt_tab[nb_vid_evt++]);
-               if(ismd_ret != ISMD_SUCCESS) {
-                  printf("failed at ismd_vidrend_get_frame_flipped_event\n");
-               }
-               break;
-
-            case ISMD_VIDREND_EVENT_TYPE_UNDERRUN: //---------------------------------------SYNC_OUT
-               ismd_ret = ismd_event_alloc(&ismd_vid_evt_tab[nb_vid_evt]);
-               if(ismd_ret != ISMD_SUCCESS) {
-                  printf("failed at ismd_event_alloc\n");
-               }
-               ismd_ret = ismd_dev_set_underrun_event(vidrend_handle, ismd_vid_evt_tab[nb_vid_evt]);
-               if(ismd_ret != ISMD_SUCCESS) {
-                  printf("failed at ismd_vidrend_set_underrun_event_event\n");
-               }
-               nb_vid_evt++;
-               break;
-
-            case ISMD_VIDREND_EVENT_TYPE_UNDERFLOW:
-               ismd_ret = ismd_vidrend_get_underflow_event(vidrend_handle, &ismd_vid_evt_tab[nb_vid_evt++]);
-               if(ismd_ret != ISMD_SUCCESS) {
-                  printf("failed at ismd_vidrend_get_underflow_event\n");
-               }
-               break;
-
-            case ISMD_VIDREND_EVENT_TYPE_UNDERFLOW_RECOVERED :
-               ismd_ret = ismd_vidrend_get_underflow_recovered_event(vidrend_handle, &ismd_vid_evt_tab[nb_vid_evt++]);
-               if(ismd_ret != ISMD_SUCCESS) {
-                  printf("failed at ismd_vidrend_get_underflow_recovered_event  \n");
-               }
-               break;
-               default : printf("The vidrend event %d can not be subscribed yet \n", vidrend_evt_to_monitor[i]);
-         }
-      }
-   }
-   return (ismd_ret);
-}
-
-
-ismd_result_t NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder_unsubscribe_events()
-{
-  ismd_result_t ismd_ret;
-  int i=0;
-
-  // video events
-  if(VIDEO_NB_EVENT_TO_MONITOR>0) {
-     for(i=0;i<VIDEO_NB_EVENT_TO_MONITOR;i++) {
-        ismd_vid_evt_tab[i]=ISMD_EVENT_HANDLE_INVALID;
-        ismd_ret = ismd_event_free(ismd_vid_evt_tab[i]);
-        if(ismd_ret != ISMD_SUCCESS) {
-           printf("failed at ismd_event_free on %d (ismd_evt = %d)\n",i, ismd_vid_evt_tab[i]);
-        }
-     }
-  }
-  return (ismd_ret);
-}
-
 /*************************************************************************
  * public:
 **************************************************************************/
@@ -225,94 +139,8 @@ NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder()
     Nero_error_t     result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
     internal_clk = true;
-    nb_vid_evt=0;
     result = NeroIntelCE4x00VideoDecoderInvalidateHandles();
-    ismd_ret = ismd_clock_alloc(ISMD_CLOCK_TYPE_FIXED, &clock_handle);
-    if (ISMD_SUCCESS != ismd_ret)
-    {
-	    result = NERO_ERROR_INTERNAL;
-	}
-    viddec_evt_to_monitor = {
-          ISMD_VIDDEC_OUT_OF_MEMORY,        //Buffer allocation failures.
-          //ISMD_VIDDEC_RESOLUTION_CHANGE,    //Resolution, aspect ratio, or frame rate change.
-          //ISMD_VIDDEC_EOS,                  //End of stream detected.
-          //ISMD_VIDDEC_BITSTREAM_ERROR,      //Bitstream error detected.
-          ISMD_VIDDEC_DROPPED_FRAMES,       //Error frames dropped.
-          //ISMD_VIDDEC_CLIENT_ID_SEEN,       //Client id seen.
-          ISMD_VIDDEC_UNDERFLOW,            //ISMD_VIDDEC_UNDERFLOW and ISMD_VIDDEC_UNDERFLOW_RECOVERED event are
-                                            //supported in CE4100 and next generations, but not CE3100. Input underflow event.
-          ISMD_VIDDEC_UNDERFLOW_RECOVERED,  //Back to normal after underflow.
-          //ISMD_VIDDEC_STREAM_FORMAT_CHANGE  //Change in Stream format detected.
-       };
-    vidrend_evt_to_monitor = {
-          //ISMD_VIDREND_EVENT_TYPE_ERROR,                //An error occured in vidrend - skipped vsync, late flip, late frames
-                                                        //or out of order frames.
-          ISMD_VIDREND_EVENT_TYPE_VSYNC_FRAME,          //Interrupt received from display with frame polarity vsyncs_frame_received in ismd_vidrend_stats_t will be updated.
-          ISMD_VIDREND_EVENT_TYPE_VSYNC_FIELD_TOP,      //Interrupt received from display with top field polarity.
-          ISMD_VIDREND_EVENT_TYPE_VSYNC_FIELD_BOTTOM,   //Interrupt recevied from display with bottom field polairty.
-          //ISMD_VIDREND_EVENT_TYPE_RES_CHG,              //Resolution change from next frame.
-          //ISMD_VIDREND_EVENT_TYPE_EOS,                  //End of stream.
-          //ISMD_VIDREND_EVENT_TYPE_CLIENT_ID_SEEN,       //Client ID Last seen by the renderer.
-          //ISMD_VIDREND_EVENT_TYPE_EOSEG,                //End of segment.
-          ISMD_VIDREND_EVENT_TYPE_UNDERRUN,             //Underrun Event.
-          //ISMD_VIDREND_EVENT_TYPE_SOSEG,                //Start of segment.
-          ISMD_VIDREND_EVENT_TYPE_FRAME_FLIPPED,        //Frame flipped event.
-          ISMD_VIDREND_EVENT_TYPE_UNDERFLOW,            //Input Underflow event This event was triggered when input of vidrend was empty.
-          ISMD_VIDREND_EVENT_TYPE_UNDERFLOW_RECOVERED,  //Input Underflow recovered event This event was triggered when underflow state recovered.
-       };
-    ismd_vid_evt_tab = {0,};
-    vid_evt_handler_thread_exit = false;
-    if (pthread_mutex_init(&mutex_stock, NULL) != 0)
-    {
-        result = NERO_ERROR_INTERNAL;
-        NERO_AUDIO_ERROR("mutex_stock  init failed \n");
-    }
-}
-/** Nero ISMD Video decoder constructor */
-NeroIntelCE4x00VideoDecoder::NeroIntelCE4x00VideoDecoder(NeroSTC* NeroSTC_ptr)
-{
-	nb_vid_evt=0;
-    NERO_VIDEO_NOTICE ("NeroIntelCE4x00VideoDecoder creator  ... \n");
-    Nero_error_t     result = NERO_SUCCESS;
-    result = NeroIntelCE4x00VideoDecoderInvalidateHandles();
-    internal_clk = false;
-    clock_handle = (ismd_clock_t)NeroSTC_ptr->NeroSTCGetClock();
-    stc = NeroSTC_ptr;
-    viddec_evt_to_monitor = {
-          ISMD_VIDDEC_OUT_OF_MEMORY,        //Buffer allocation failures.
-          //ISMD_VIDDEC_RESOLUTION_CHANGE,    //Resolution, aspect ratio, or frame rate change.
-          //ISMD_VIDDEC_EOS,                  //End of stream detected.
-          //ISMD_VIDDEC_BITSTREAM_ERROR,      //Bitstream error detected.
-          ISMD_VIDDEC_DROPPED_FRAMES,       //Error frames dropped.
-          //ISMD_VIDDEC_CLIENT_ID_SEEN,       //Client id seen.
-          ISMD_VIDDEC_UNDERFLOW,            //ISMD_VIDDEC_UNDERFLOW and ISMD_VIDDEC_UNDERFLOW_RECOVERED event are
-                                            //supported in CE4100 and next generations, but not CE3100. Input underflow event.
-          ISMD_VIDDEC_UNDERFLOW_RECOVERED,  //Back to normal after underflow.
-          //ISMD_VIDDEC_STREAM_FORMAT_CHANGE  //Change in Stream format detected.
-       };
-    vidrend_evt_to_monitor = {
-          //ISMD_VIDREND_EVENT_TYPE_ERROR,                //An error occured in vidrend - skipped vsync, late flip, late frames
-                                                        //or out of order frames.
-          ISMD_VIDREND_EVENT_TYPE_VSYNC_FRAME,          //Interrupt received from display with frame polarity vsyncs_frame_received in ismd_vidrend_stats_t will be updated.
-          ISMD_VIDREND_EVENT_TYPE_VSYNC_FIELD_TOP,      //Interrupt received from display with top field polarity.
-          ISMD_VIDREND_EVENT_TYPE_VSYNC_FIELD_BOTTOM,   //Interrupt recevied from display with bottom field polairty.
-          //ISMD_VIDREND_EVENT_TYPE_RES_CHG,              //Resolution change from next frame.
-          //ISMD_VIDREND_EVENT_TYPE_EOS,                  //End of stream.
-          //ISMD_VIDREND_EVENT_TYPE_CLIENT_ID_SEEN,       //Client ID Last seen by the renderer.
-          //ISMD_VIDREND_EVENT_TYPE_EOSEG,                //End of segment.
-          ISMD_VIDREND_EVENT_TYPE_UNDERRUN,             //Underrun Event.
-          //ISMD_VIDREND_EVENT_TYPE_SOSEG,                //Start of segment.
-          ISMD_VIDREND_EVENT_TYPE_FRAME_FLIPPED,        //Frame flipped event.
-          ISMD_VIDREND_EVENT_TYPE_UNDERFLOW,            //Input Underflow event This event was triggered when input of vidrend was empty.
-          ISMD_VIDREND_EVENT_TYPE_UNDERFLOW_RECOVERED,  //Input Underflow recovered event This event was triggered when underflow state recovered.
-       };
-    ismd_vid_evt_tab = {0,};
-    vid_evt_handler_thread_exit = false;
-    if (pthread_mutex_init(&mutex_stock, NULL) != 0)
-    {
-        result = NERO_ERROR_INTERNAL;
-        NERO_AUDIO_ERROR("mutex_stock  init failed \n");
-    }
+    clock_handle = NeroIntelCE4x00SystemClock::aquire();
 }
 
 /** Nero ISMD Video decoder constructor */
@@ -322,16 +150,7 @@ NeroIntelCE4x00VideoDecoder::~NeroIntelCE4x00VideoDecoder()
     NERO_VIDEO_NOTICE ("NeroIntelCE4x00VideoDecoder killer ... \n");
     Nero_error_t     result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    if(pthread_mutex_destroy(&mutex_stock)!=0)
-    {
-        result = NERO_ERROR_INTERNAL;
-        NERO_AUDIO_ERROR("mutex_stock mutex destruction  fail ... (%d) \n", result);
-    }
-    if(internal_clk == true)
-    {
-	    _TRY(ismd_ret,result, ismd_clock_free,(clock_handle));
-	}
-    stc = NULL;
+    clock_handle = ISMD_CLOCK_HANDLE_INVALID;
 error:
     result = NeroIntelCE4x00VideoDecoderInvalidateHandles();
 }
@@ -339,97 +158,201 @@ error:
 /** Nero ISMD Video decoder to init and start the decoder  */
 Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderInit (Nero_video_codec_t NeroVideoAlgo)
 {
+
+
     /* Video */
     NERO_VIDEO_NOTICE ("NeroVideoDecoderInit  ... \n");
     Nero_error_t result = NERO_SUCCESS;
-    ismd_result_t ismd_ret;
-    ismd_vidsink_scale_params_t sp;
-    int time_valid = 0x01;
-    ismd_time_t curr_time = 0x00;
-    orginal_clock_time = 0x00;
-    Nero_stc_type_t stc_type = NERO_STC_FREERUN;
-    ismd_codec_type_t vid_fmt = NeroIntelCE4x00VideoDecoder_NERO2ISMD_codeRemap(NeroVideoAlgo);
-    /*_TRY(ismd_ret,result, build_viddec,(video_algo));*/
-    _TRY(ismd_ret,result,ismd_viddec_open,(vid_fmt, &viddec_handle));
-    _TRY(ismd_ret,result,ismd_viddec_set_pts_interpolation_policy,(viddec_handle, ISMD_VIDDEC_INTERPOLATE_MISSING_PTS , ISMD_NO_PTS));
-    _TRY(ismd_ret,result,ismd_viddec_set_frame_mask,(viddec_handle, ISMD_VIDDEC_SKIP_NONE));
-    _TRY(ismd_ret,result,ismd_viddec_set_max_frames_to_decode,(viddec_handle,ISMD_VIDDEC_ALL_FRAMES));
-    _TRY(ismd_ret,result,ismd_viddec_set_frame_error_policy,(viddec_handle, ISMD_VIDDEC_EMIT_ALL));
-    _TRY(ismd_ret,result,ismd_viddec_get_input_port,(viddec_handle, &viddec_input_port_handle));
-    _TRY(ismd_ret,result,ismd_viddec_get_output_port,(viddec_handle, &viddec_output_port_handle));
-    _TRY(ismd_ret,result,ismd_dev_set_state,(viddec_handle,ISMD_DEV_STATE_PAUSE));
-    /*_TRY(ismd_ret,result, build_vidpproc,());*/
-    _TRY(ismd_ret,result,ismd_vidpproc_open,(&vidpproc_handle));
-    /*_TRY(ismd_ret,result, build_vidrend,());*/
-    _TRY(ismd_ret,result,ismd_vidrend_open,(&vidrend_handle));
-    _TRY(ismd_ret,result,ismd_vidrend_set_video_plane,(vidrend_handle, layer));
-    if (ISMD_CODEC_TYPE_H264 == vid_fmt) {
-        _TRY(ismd_ret,result,ismd_vidrend_enable_max_hold_time,(vidrend_handle,10,1));
-    }
-    /*_TRY(ismd_ret,result,build_vidsink,());*/
+    ismd_result_t ismd_ret = ISMD_SUCCESS;
+	ismd_codec_type_t vid_type = NeroIntelCE4x00VideoDecoder_NERO2ISMD_codeRemap(NeroVideoAlgo);
+    /* init video decoder */
+
+	NERO_VIDEO_NOTICE ("init video decoder  ... \n");
 
 
-    _TRY(ismd_ret,result,ismd_vidsink_open,(&vidsink_handle));
-    _TRY(ismd_ret,result,ismd_vidsink_set_smd_handles,(vidsink_handle,vidpproc_handle, vidrend_handle));
-    _TRY(ismd_ret,result,ismd_vidsink_get_input_port,(vidsink_handle,&vidpproc_input_port_handle));
-    _TRY(ismd_ret,result,ismd_vidsink_enable_frame_by_frame_mode,(vidsink_handle, 0));
-    sp.crop_window.h_offset = 0;
-    sp.crop_window.v_offset = 0;
-    sp.crop_window.width = DISPLAY_WIDTH;
-    sp.crop_window.height = DISPLAY_HEIGHT;
-    sp.crop_enable = 0;
-    sp.dest_window.x=0;
-    sp.dest_window.y=0;
-    sp.dest_window.width = DISPLAY_WIDTH;
-    sp.dest_window.height = DISPLAY_HEIGHT;
-    sp.aspect_ratio.numerator = 1;
-    sp.aspect_ratio.denominator = 1;
-    sp.scaling_policy = SCALE_TO_FIT;
-    _TRY(ismd_ret,result,ismd_vidsink_set_global_scaling_params,(vidsink_handle,sp));
-    _TRY(ismd_ret,result,ismd_vidsink_set_flush_policy,(vidsink_handle,ISMD_VIDSINK_FLUSH_POLICY_REPEAT_FRAME  ));
-    _TRY(ismd_ret,result,ismd_vidsink_set_pause_policy,(vidsink_handle, ISMD_VIDSINK_PAUSE_POLICY_ANIMATION));
-    _TRY(ismd_ret,result,ismd_vidsink_set_state,(vidsink_handle,ISMD_DEV_STATE_PAUSE));
-    /*_TRY(ismd_ret,result, assign_video_clock,());*/
-    _TRY(ismd_ret,result,ismd_vidsink_set_clock,(vidsink_handle, clock_handle));
-    /*_TRY(ismd_ret,result, connect_video_pipeline,());*/
-    _TRY(ismd_ret,result,ismd_port_connect,(viddec_output_port_handle, vidpproc_input_port_handle));
-    //_TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-    /*_TRY(ismd_ret,result, configure_video_clocks,(0, 1));*/
-	//_TRY(ismd_ret,result,ismd_clock_get_time,(clock_handle, &curr_time));
-    stc_type = stc->NeroSTCGetType();
-    switch(stc_type)
-    {
-        case NERO_STC_AUDIO_MASTER:
-        {
-        	//_TRY(ismd_ret,result,ismd_clock_get_time,(clock_handle, &curr_time));
-        	curr_time = stc->NeroSTCGetBaseTime();
-        	_TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-        	 _TRY(ismd_ret,result,ismd_vidsink_set_base_time,(vidsink_handle, curr_time));
-        }
-        case NERO_STC_VIDEO_MASTER:
-        case NERO_STC_FREERUN:
-        default:
-        {
-        	curr_time =0x00;
-         	_TRY(ismd_ret,result,ismd_clock_set_time,(clock_handle, curr_time));
-         	 result = stc->NeroSTCSetBaseTime(curr_time);
-        	 _TRY(ismd_ret,result,ismd_vidsink_set_base_time,(vidsink_handle, curr_time));
-        	 break;
+
+    ismd_ret = ismd_viddec_open(vid_type, &viddec_handle);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_viddec_open failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_viddec_set_pts_interpolation_policy(viddec_handle,ISMD_VIDDEC_INTERPOLATE_MISSING_PTS,ISMD_NO_PTS);
+    if( ISMD_SUCCESS != ismd_ret ) {
+    	NERO_VIDEO_ERROR("ismd_viddec_set_pts_interpolation_policy failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_viddec_set_max_frames_to_decode(viddec_handle,ISMD_VIDDEC_ALL_FRAMES);
+    if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_ERROR("ismd_viddec_set_pts_interpolation_policy failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    if (ISMD_CODEC_TYPE_MPEG2 == vid_type) {
+        ismd_ret = ismd_viddec_set_seq_disp_ext_default_policy(viddec_handle,ISMD_VIDDEC_ISO13818_2);
+        if( ISMD_SUCCESS != ismd_ret ) {
+        	NERO_VIDEO_ERROR("ismd_viddec_set_seq_disp_ext_default_policy failed (%d)!", ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+            goto exit;
         }
     }
-    _TRY(ismd_ret, result , ismd_vidsink_set_state,(vidsink_handle,ISMD_DEV_STATE_PAUSE));
-    _TRY(ismd_ret, result , ismd_dev_set_state,(viddec_handle, ISMD_DEV_STATE_PAUSE));
-    result = NeroVideoDecoderPlay();
+
+    ismd_ret = ismd_viddec_get_input_port(viddec_handle,  &viddec_input);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_viddec_get_input_port failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_viddec_get_output_port(viddec_handle, &viddec_output);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_viddec_get_output_port failed \n");
+        goto exit;
+    }
+
+
+
+/* init video proc */
+    NERO_VIDEO_NOTICE ("init video Proc  ... \n");
+    /* video pproc setup */
+    ismd_ret = ismd_vidpproc_open(&vidpproc_handle);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidpproc_open failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidpproc_set_deinterlace_policy(vidpproc_handle, ISMD_VIDPPROC_DI_POLICY_VIDEO);
+    if( ISMD_SUCCESS != ismd_ret ) {
+    	NERO_VIDEO_ERROR("ismd_vidpproc_set_deinterlace_policy failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret =  ismd_vidpproc_set_scaling_policy(vidpproc_handle, ISMD_VIDPPROC_SCALING_POLICY_SCALE_TO_FIT);
+    if( ISMD_SUCCESS != ismd_ret ) {
+    	NERO_VIDEO_ERROR("ismd_vidpproc_set_scaling_policy failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidpproc_set_dest_params(vidpproc_handle,
+               display.tvmode.width,
+               display.tvmode.height,
+               0x01 ,
+               0x01);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidpproc_set_dest_params failed ismd_ret = %d \n", ismd_ret);
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidpproc_get_input_port(vidpproc_handle, &vidpproc_input);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidpproc_get_input_port failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidpproc_get_output_port(vidpproc_handle, &vidpproc_output);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidpproc_get_output_port failed \n");
+        goto exit;
+    }
+
+    /* init video Rend */
+    NERO_VIDEO_NOTICE ("init video Render  ... \n");
+    ismd_ret = ismd_vidrend_open(&vidrend_handle);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidrend_open failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidrend_set_interlaced_display_rate(ISMD_VIDREND_INTERLACED_RATE_50);
+    if( ISMD_SUCCESS != ismd_ret ) {
+    	NERO_VIDEO_ERROR("ismd_vidrend_set_interlaced_display_rate failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidrend_enable_max_hold_time(vidrend_handle, 10, 1);
+    if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_ERROR("ismd_vidrend_enable_max_hold_time failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidrend_disable_fixed_frame_rate(vidrend_handle);
+    if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_ERROR("ismd_vidrend_disable_fixed_frame_rate failed (%d)!", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidrend_set_video_plane(vidrend_handle, layer);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidrend_set_video_plane failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_vidrend_get_input_port(vidrend_handle, &vidrend_input);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_vidrend_get_input_port failed \n");
+        goto exit;
+    }
+
+
+
+    /***************************************************************************************/
+    /************************************** connect pipeline *******************************/
+    /***************************************************************************************/
+
+    /* connect pipeline */
+    ismd_ret = ismd_port_connect(vidrend_input, vidpproc_output);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_port_connect failed \n");
+        goto exit;
+    }
+
+    ismd_ret = ismd_port_connect(vidpproc_input, viddec_output);
+    if (ismd_ret!=ISMD_SUCCESS) {
+    	result = NERO_ERROR_INTERNAL;
+    	NERO_VIDEO_ERROR(" ismd_port_connect failed \n");
+        goto exit;
+    }
+    result = NeroVideoDecoderPause();
     if (NERO_SUCCESS !=result)
     {
- 	   NERO_VIDEO_ERROR ("NeroAudioDecoderPlay fail !!! \n");
- 	   goto error;
+    	NERO_VIDEO_ERROR ("NeroVideoDecoderPause fail !!! \n");
+        goto exit;
     }
-    result = NeroIntelCE4x00VideoDecoderSend_new_segment();
-    _TRY(ismd_ret,result ,NeroIntelCE4x00VideoDecoder_subscribe_events,());
-    os_thread_create(&vid_evt_handler_thread, vid_evt_handler, this, 0, 0, "vid_evt_handler thread");
+    /* clock setting */
 
-error:
+    	ismd_ret = ismd_dev_set_clock(vidrend_handle, clock_handle);
+        if (ismd_ret!=ISMD_SUCCESS) {
+        	result = NERO_ERROR_INTERNAL;
+            NERO_VIDEO_ERROR(" ismd_vidrend_set_timing_mode failed \n");
+            goto exit;
+        }
+    NeroIntelCE4x00VideoDecoder_EventSubscribe();
+    //result = NeroVideoDecoderPause();
+    if (NERO_SUCCESS !=result)
+    {
+ 	   NERO_VIDEO_ERROR ("NeroVideoDecoderPlay fail !!! \n");
+ 	   goto exit;
+    }
+
+exit:
     return (result);
 
 }
@@ -452,75 +375,71 @@ Nero_error_t  NeroIntelCE4x00VideoDecoder::NeroVideoDecoderSetupPlane()
     Nero_error_t result = NERO_SUCCESS;
     gdl_ret_t ret_gdl = GDL_SUCCESS;
 
-    gdl_display_info_t         display;
-    gdl_rectangle_t            rect;
-    gdl_plane_id_t             plane;
-    gdl_boolean_t              is_scaling_enabled;
-    uint8_t                    alpha;
+    is_scaling_enabled = GDL_TRUE;
+    layer = GDL_PLANE_ID_UPP_B;
 
-     is_scaling_enabled = GDL_TRUE;
-     layer = GDL_PLANE_ID_UPP_B;
+    if ((ret_gdl = gdl_init(0))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed To initialize GDL gdl_ret = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_init(0))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed To initialize GDL gdl_ret = %d \n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
+    if ((ret_gdl = gdl_get_display_info(GDL_DISPLAY_ID_0, &display))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_get_display_info gdl_ret = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_get_display_info(GDL_DISPLAY_ID_0, &display))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed at gdl_get_display_info gdl_ret = %d \n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
+    if ((ret_gdl = gdl_plane_reset(layer))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_reset = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_plane_reset(layer))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed at gdl_plane_reset = %d \n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
+    if ((ret_gdl = gdl_plane_config_begin(layer))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_config_begin = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_plane_config_begin(layer))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed at gdl_plane_config_begin = %d \n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
+    rect.origin.x = 0;
+    rect.origin.y = 0;
+    rect.width    = display.tvmode.width;
+    rect.height   = display.tvmode.height;
 
-     rect.origin.x = 0;
-     rect.origin.y = 0;
-     rect.width    = display.tvmode.width;
-     rect.height   = display.tvmode.height;
+#if 1
+    NERO_VIDEO_NOTICE("graph.rect.origin.x = %d ", rect.origin.x);
+    NERO_VIDEO_NOTICE("graph.rect.origin.y = %d ", rect.origin.y);
+    NERO_VIDEO_NOTICE("graph.rect.width = %d ", rect.width);
+    NERO_VIDEO_NOTICE("graph.rect.height = %d ", rect.height);
+#endif
 
-     NERO_VIDEO_NOTICE("origin.x = %d \n", rect.origin.x);
-     NERO_VIDEO_NOTICE("origin.y = %d \n", rect.origin.y);
-     NERO_VIDEO_NOTICE("rect.width = %d \n", rect.width);
-     NERO_VIDEO_NOTICE("rect.height = %d \n", rect.height);
+    if ((ret_gdl = gdl_plane_set_attr(GDL_PLANE_DST_RECT, &rect))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_set_attr = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_plane_set_attr(GDL_PLANE_DST_RECT, &rect))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed at gdl_plane_set_attr = %d\n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
+    if ((ret_gdl = gdl_plane_set_attr(GDL_PLANE_SCALE, &is_scaling_enabled))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_set_attr = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_plane_set_attr(GDL_PLANE_SCALE, &is_scaling_enabled))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed at gdl_plane_set_attr = %d\n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
+    if ((ret_gdl = gdl_plane_config_end(GDL_FALSE))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_config_end = %d \n", ret_gdl);
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
 
-     if ((ret_gdl = gdl_plane_config_end(GDL_FALSE))!= GDL_SUCCESS)
-     {
-    	 NERO_VIDEO_ERROR("Failed at gdl_plane_config_end = %d\n", ret_gdl);
-         result = NERO_ERROR_INTERNAL;
-         goto error;
-     }
-error:
-
+exit:
     return (result);
 }
 
@@ -528,29 +447,63 @@ error:
 
 Nero_error_t  NeroIntelCE4x00VideoDecoder::NeroVideoDecoderResizeLayer(size_t w,size_t h,size_t x,size_t y)
 {
-
     NERO_VIDEO_NOTICE ("NeroVideoDecoderResizeLayer  ... \n");
     Nero_error_t result = NERO_SUCCESS;
-    ismd_result_t ismd_ret;
+    ismd_result_t ismd_ret= ISMD_SUCCESS;
+    gdl_ret_t ret_gdl = GDL_SUCCESS;
 
-    printf ("Resize (org): w(%d)*h(%d) x(%d) y(%d)\n", w, h, x, y);
-    ismd_vidsink_scale_params_t sp;
-    memset(&sp,0,sizeof(sp));
 
-    sp.crop_window.h_offset = 0;
-    sp.crop_window.v_offset = 0;
-    sp.crop_window.width = w;
-    sp.crop_window.height = h;
-    sp.crop_enable = 0;
-    sp.dest_window.x=x;
-    sp.dest_window.y=y;
-    sp.dest_window.width = w;
-    sp.dest_window.height = h;
-    sp.aspect_ratio.numerator = 1;
-    sp.aspect_ratio.denominator = 1;
-    sp.scaling_policy = SCALE_TO_FIT;
-    _TRY(ismd_ret, result , ismd_vidsink_set_global_scaling_params,(vidsink_handle,sp));
-error:
+#if 1
+    NERO_VIDEO_NOTICE("display.tvmode.width = %d \n",display.tvmode.width);
+    NERO_VIDEO_NOTICE("display.tvmode.height = %d \n",display.tvmode.height);
+    NERO_VIDEO_NOTICE("rect.x = %d \n",x);
+    NERO_VIDEO_NOTICE("rect.y = %d \n",y);
+    NERO_VIDEO_NOTICE("rect.width = %d \n",w);
+    NERO_VIDEO_NOTICE("rect.height = %d \n", h);
+    NERO_VIDEO_NOTICE("alpha = %d \n", alpha);
+#endif
+    if ((x + w > display.tvmode.width)||
+        (y + h > display.tvmode.height))
+    {
+    	NERO_VIDEO_ERROR("The requested size is larger than screen capabilities");
+        result = NERO_ERROR_BAD_PARAMETER;
+        goto exit;
+    }
+
+    rect.origin.x = x;
+    rect.origin.y = y;
+    rect.width    = w;
+    rect.height   = h;
+    //alpha         = p.alpha;
+
+    if ((ismd_ret = ismd_vidpproc_set_dest_params(vidpproc_handle, rect.width, rect.height, 1, 1))!= ISMD_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("failed at ismd_vidpproc_set_dest_params = %08x \n",ismd_ret);
+    	result = NERO_ERROR_INTERNAL;
+    }
+
+    if ((ret_gdl = gdl_plane_config_begin(layer))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_config_begin = %d \n", ret_gdl);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    if ((ret_gdl = gdl_plane_set_attr(GDL_PLANE_DST_RECT, &rect))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_set_attr = %d \n", ret_gdl);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    if ((ret_gdl = gdl_plane_config_end(GDL_FALSE))!= GDL_SUCCESS)
+    {
+    	NERO_VIDEO_ERROR("Failed at gdl_plane_config_end = %d \n", ret_gdl);
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+exit:
     return (result);
 }
 
@@ -559,23 +512,15 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderUnInit()
 {
     NERO_VIDEO_NOTICE ("NeroVideoDecoderUnInit  ... \n");
     Nero_error_t result = NERO_SUCCESS;
-    ismd_result_t ismd_ret;
+    ismd_result_t ismd_ret= ISMD_SUCCESS;
     /*_TRY(ismd_ret,pause_video_pipeline,());*/
+    NeroIntelCE4x00VideoDecoder_EventUnSubscribe();
     result = NeroVideoDecoderPause();
     if (NERO_SUCCESS !=result)
     {
     	NERO_VIDEO_ERROR ("NeroVideoDecoderPause fail !!! \n");
         goto error;
     }
-    /*_TRY(ismd_ret,stop_video_pipeline,());*/
-    result = NeroVideoDecoderStop();
-    if (NERO_SUCCESS !=result)
-    {
-        NERO_VIDEO_ERROR ("NeroVideoDecoderStop fail !!! \n");
-   	    goto error;
-    }
-    _TRY(ismd_ret,result ,NeroIntelCE4x00VideoDecoder_unsubscribe_events,());
-    /*_TRY(ismd_ret,flush_video_pipeline,());*/
     result = NeroVideoDecoderFlush();
     if (NERO_SUCCESS !=result)
     {
@@ -583,7 +528,78 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderUnInit()
    	    goto error;
     }
 
+
+    result = NeroVideoDecoderStop();
+    if (NERO_SUCCESS !=result)
+    {
+        NERO_VIDEO_ERROR ("NeroVideoDecoderStop fail !!! \n");
+   	    goto error;
+    }
+
      /*_TRY(ismd_ret,disconnect_video_pipeline,());*/
+    /***************************************************************************************/
+    /*********************************** Disconnects ports *********************************/
+    /***************************************************************************************/
+
+    ismd_ret = ismd_port_disconnect(viddec_input);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_disconnect ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_detach(viddec_input);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_detach ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_disconnect(viddec_output);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_disconnect ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_detach(viddec_output);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_detach ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_disconnect(vidpproc_input);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_disconnect ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_detach(vidpproc_input);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_detach ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_disconnect(vidpproc_output);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_disconnect ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_detach(vidpproc_output);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_detach ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_disconnect(vidrend_input);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_disconnect ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+
+    ismd_ret = ismd_port_detach(vidrend_input);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_port_detach ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
 
     /*_TRY(ismd_ret,close_video_pipeline,());*/
     result = NeroVideoDecoderClose();
@@ -592,12 +608,14 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderUnInit()
         NERO_VIDEO_ERROR ("NeroVideoDecoderFlush fail !!! \n");
  	    goto error;
     }
+
     result = NeroIntelCE4x00VideoDecoderInvalidateHandles();
     if (NERO_SUCCESS !=result)
     {
-        NERO_VIDEO_ERROR ("NeroAudioDecoderPlay fail !!! \n");
+        NERO_VIDEO_ERROR ("NeroVideoDecoderPlay fail !!! \n");
         goto error;
     }
+    VideoDecoderState = NERO_DECODER_LAST;
 error:
     return(result);
 
@@ -610,13 +628,28 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderClose()
 
     NERO_VIDEO_NOTICE ("NeroVideoDecoderClose  ... \n");
     Nero_error_t result = NERO_SUCCESS;
-    ismd_result_t ismd_ret;
-    _TRY(ismd_ret, result , ismd_dev_close, (viddec_handle));
-    _TRY(ismd_ret, result , ismd_vidsink_close,(vidsink_handle));
-    _TRY(ismd_ret, result , ismd_dev_close,(vidpproc_handle));
-    _TRY(ismd_ret, result , ismd_dev_close,(vidrend_handle));
+    ismd_result_t ismd_ret = ISMD_SUCCESS;
+    /***************************************************************************************/
+    /*********************************** Close the devices *********************************/
+    /***************************************************************************************/
+    ismd_ret = ismd_dev_close(viddec_handle);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_dev_close ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
 
-error:
+    ismd_ret = ismd_dev_close(vidpproc_handle);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_dev_close ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+    ismd_ret = ismd_dev_close(vidrend_handle);
+    if (ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_WARNING("Failed at ismd_dev_close ismd_ret = %d \n", ismd_ret);
+        result = NERO_ERROR_INTERNAL;
+    }
+    VideoDecoderState = NERO_DECODER_STOP;
+exit:
      return (result);
 }
 
@@ -627,11 +660,29 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderFlush()
     NERO_VIDEO_NOTICE ("NeroVideoDecoderFlush  ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    _TRY(ismd_ret, result, ismd_dev_flush, (viddec_handle)  );
-    _TRY(ismd_ret, result, ismd_dev_flush, (vidpproc_handle));
-    _TRY(ismd_ret, result, ismd_dev_flush, (vidrend_handle) );
 
-error:
+    ismd_ret = ismd_dev_flush(viddec_handle);
+    if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_ERROR("failed at ismd_dev_flush, viddec_handle\n");
+        result= NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_dev_flush(vidpproc_handle);
+    if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_ERROR("failed at ismd_dev_flush, vidpproc_handle\n");
+        result= NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    ismd_ret = ismd_dev_flush(vidrend_handle);
+    if(ismd_ret != ISMD_SUCCESS) {
+    	NERO_VIDEO_ERROR("failed at ismd_dev_flush, vidrend_handle\n");
+        result= NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+exit:
     return (result);
 
 }
@@ -642,9 +693,28 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderStop()
     NERO_VIDEO_NOTICE ("NeroVideoDecoderStop  ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    _TRY(ismd_ret, result ,ismd_vidsink_set_state,(vidsink_handle,ISMD_DEV_STATE_STOP));
-    _TRY(ismd_ret,result ,ismd_dev_set_state,(viddec_handle, ISMD_DEV_STATE_STOP));
 
+    if(VideoDecoderState != NERO_DECODER_STOP)
+    {
+        ismd_ret = ismd_dev_set_state(viddec_handle, ISMD_DEV_STATE_STOP);
+        if(ismd_ret!=ISMD_SUCCESS){
+    	    NERO_VIDEO_WARNING("failed at ismd_dev_set_state ismd_ret = %08x \n",ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+
+        ismd_ret = ismd_dev_set_state(vidpproc_handle, ISMD_DEV_STATE_STOP);
+        if(ismd_ret!=ISMD_SUCCESS){
+    	    NERO_VIDEO_WARNING("failed at ismd_dev_set_state ismd_ret = %08x \n",ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+
+        ismd_ret = ismd_dev_set_state(vidrend_handle, ISMD_DEV_STATE_STOP);
+        if(ismd_ret!=ISMD_SUCCESS){
+    	    NERO_VIDEO_WARNING("failed at ismd_dev_set_state ismd_ret = %08x \n",ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+        VideoDecoderState = NERO_DECODER_STOP;
+    }
 error:
     return (result);
 }
@@ -656,17 +726,37 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderPause()
     NERO_VIDEO_NOTICE ("NeroVideoDecoderPause  ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    Nero_stc_type_t stc_type = stc->NeroSTCGetType();
-    _TRY(ismd_ret, result , ismd_vidsink_set_state,(vidsink_handle,ISMD_DEV_STATE_PAUSE));
-    _TRY(ismd_ret, result , ismd_dev_set_state,(viddec_handle, ISMD_DEV_STATE_PAUSE));
-    _TRY(ismd_ret,result, ismd_clock_get_time,(clock_handle, &orginal_clock_time));
-    _TRY(ismd_ret,result ,ismd_dev_get_stream_base_time,(vidrend_handle, &original_base_time));
-    if(stc_type == NERO_STC_VIDEO_MASTER)
+    ismd_time_t pause_time = NeroIntelCE4x00SystemClock::GetTime();
+    if ((VideoDecoderState != NERO_DECODER_PAUSE)/* && (VideoDecoderState != NERO_DECODER_LAST)*/)
     {
-    	stc->NeroSTCSetBaseTime(original_base_time);
+        result = NeroIntelCE4x00SystemClock::SetPauseTime(pause_time);
+
+        if (NERO_SUCCESS!=result)
+        {
+        	NERO_VIDEO_WARNING("SetPauseTime fail (%d)  \n",result);
+        	goto error;
+        }
+        ismd_ret = ismd_dev_set_state(viddec_handle, ISMD_DEV_STATE_PAUSE);
+        if(ismd_ret!=ISMD_SUCCESS){
+    	    NERO_VIDEO_WARNING("failed at ismd_dev_set_state ismd_ret = %08x \n",ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+
+        ismd_ret = ismd_dev_set_state(vidpproc_handle, ISMD_DEV_STATE_PAUSE);
+        if(ismd_ret!=ISMD_SUCCESS){
+    	    NERO_VIDEO_WARNING("failed at ismd_dev_set_state ismd_ret = %08x \n",ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+
+        ismd_ret = ismd_dev_set_state(vidrend_handle, ISMD_DEV_STATE_PAUSE);
+        if(ismd_ret!=ISMD_SUCCESS){
+    	    NERO_VIDEO_WARNING("failed at ismd_dev_set_state ismd_ret = %08x \n",ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+
+        VideoDecoderState = NERO_DECODER_PAUSE;
     }
 error:
-
     return (result);
 }
 
@@ -678,28 +768,53 @@ Nero_error_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderPlay()
     NERO_VIDEO_NOTICE ("NeroVideoDecoderPlay  ... \n");
     Nero_error_t result = NERO_SUCCESS;
     ismd_result_t ismd_ret;
-    ismd_dev_state_t state;
-    Nero_stc_type_t stc_type = stc->NeroSTCGetType();
-    _TRY(ismd_ret,result, ismd_dev_get_state,(vidrend_handle,&state));
-    if(state != ISMD_DEV_STATE_PAUSE)
+    ismd_time_t   pause_duration = 0;
+    ismd_time_t   curr_time = 0;
+    ismd_time_t   pause_time = 0;
+    ismd_time_t   base_time = 0;
+    Nero_stc_type_t stc_type = NERO_STC_FREERUN;
+    if ((VideoDecoderState != NERO_DECODER_PLAY) /*&&(VideoDecoderState != NERO_DECODER_LAST)*/)
     {
-       _TRY(ismd_ret,result ,ismd_vidsink_set_state,(vidsink_handle,ISMD_DEV_STATE_PAUSE));
+        ismd_ret = ismd_dev_set_state(viddec_handle, ISMD_DEV_STATE_PLAY);
+        if(ismd_ret != ISMD_SUCCESS) {
+    	    NERO_VIDEO_WARNING("ismd_dev_set_state, viddec_dev PLAY failed (%d)! \n", ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+
+        ismd_ret = ismd_dev_set_state(vidpproc_handle, ISMD_DEV_STATE_PLAY);
+        if(ismd_ret != ISMD_SUCCESS) {
+    	    NERO_VIDEO_WARNING("ismd_dev_set_state, vidpproc_dev PLAY failed (%d)! \n", ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+        }
+        /* calculate the new base time */
+        curr_time  = NeroIntelCE4x00SystemClock::GetTime();
+        pause_time = NeroIntelCE4x00SystemClock::GetPauseTime();
+        base_time = NeroIntelCE4x00SystemClock::GetBaseTime();
+        pause_duration = curr_time - pause_time;
+        base_time += pause_duration;
+        NeroIntelCE4x00SystemClock::SetBaseTime(base_time);
+        /* Set the new base time */
+        ismd_ret = ismd_dev_set_stream_base_time (vidrend_handle, base_time);
+        if ( ISMD_SUCCESS != ismd_ret ) {
+        	NERO_VIDEO_ERROR("ismd_dev_set_stream_base_time failed (%d)", ismd_ret);
+        }
+
+        if(ismd_ret != ISMD_SUCCESS) {
+    	    NERO_VIDEO_WARNING("ismd_dev_set_stream_base_time failed (%d)! \n", ismd_ret);
+            result = NERO_ERROR_INTERNAL;
+            goto error;
+        }
+
+       ismd_ret = ismd_dev_set_state(vidrend_handle, ISMD_DEV_STATE_PLAY);
+
+       result = NeroVideoDecoderFlush();
+       if (NERO_SUCCESS !=result)
+       {
+           NERO_VIDEO_ERROR ("NeroVideoDecoderFlush fail !!! \n");
+  	       goto error;
+       }
+       VideoDecoderState = NERO_DECODER_PLAY;
     }
-   _TRY(ismd_ret,result, ismd_clock_get_time,(clock_handle, &curr_clock));
-   if(stc_type == NERO_STC_AUDIO_MASTER)
-   {
-       original_base_time=stc->NeroSTCGetBaseTime();
-   }
-   original_base_time+= curr_clock-orginal_clock_time+3000;
-
-   _TRY(ismd_ret, result, ismd_vidsink_set_base_time,(vidsink_handle,original_base_time));
-
-   _TRY(ismd_ret,result ,ismd_vidsink_set_state,(vidsink_handle,ISMD_DEV_STATE_PLAY));
-   _TRY(ismd_ret,result ,ismd_dev_set_state,(viddec_handle, ISMD_DEV_STATE_PLAY));
-   if(state != ISMD_DEV_STATE_PAUSE)
-   {
-      _TRY(ismd_ret,result ,ismd_vidsink_flush,(vidsink_handle));
-   }
 error:
     return (result);
 
@@ -707,7 +822,7 @@ error:
 
 Nero_error_t   NeroIntelCE4x00VideoDecoder::NeroVideoDecoderFeed (uint8_t* payload, size_t payload_size, uint64_t nrd_pts, bool discontinuity)
 {
-
+	/*********************************/
 	Nero_error_t result = NERO_SUCCESS;
     ismd_result_t            ismd_ret;
     ismd_buffer_handle_t     bufin_handle;
@@ -766,13 +881,12 @@ Nero_error_t   NeroIntelCE4x00VideoDecoder::NeroVideoDecoderFeed (uint8_t* paylo
             result = NERO_ERROR_INTERNAL;
             goto error;
         }
-        while (ismd_port_write(viddec_input_port_handle, bufin_handle) != ISMD_SUCCESS) {
+        while (ismd_port_write(viddec_input, bufin_handle) != ISMD_SUCCESS) {
             usleep(40);
         }
 
         inject_size += temp_size;
     } while ( inject_size < payload_size );
-
 error:
 	return (result);
 }
@@ -798,8 +912,8 @@ uint64_t NeroIntelCE4x00VideoDecoder::NeroVideoDecoderGetLastPts()
     }
     else {
        video_pts = (video_position.last_segment_pts/90LL);
-   	/*NERO_VIDEO_NOTICE ("video_pts = %d  ... \n",video_pts);*/
     }
+    NERO_VIDEO_ERROR ("video_pts = %d  ... \n",video_pts);
 error:
     return((uint64_t)video_pts);
 }
@@ -807,16 +921,68 @@ error:
 int NeroIntelCE4x00VideoDecoder::NeroVideoDecoderGetport()
 {
     NERO_VIDEO_NOTICE ("NeroVideoDecoderGetport  ... \n");
-    return ((int)viddec_input_port_handle);
+    return ((int)viddec_input);
 }
-
-Info NeroIntelCE4x00VideoDecoder::Statut(void) const
+Nero_error_t   NeroIntelCE4x00VideoDecoder::NeroVideoDecoderEventWait(NeroEvents_t *event)
 {
+    ismd_event_t event_got;
+    ismd_result_t ret_ismd = ISMD_SUCCESS;
+	Nero_error_t result = NERO_SUCCESS;
+	size_t evt = NERO_EVENT_LAST;
 
-	int evt = 0x00;
-    pthread_mutex_lock((pthread_mutex_t*)&mutex_stock);
-    evt = triggered_event;
-    pthread_mutex_unlock((pthread_mutex_t*)&mutex_stock);
-    NERO_AUDIO_NOTICE("NeroIntelCE4x00VideoDecoder :: triggered_event = %d \n",evt);
-	return ((int)evt);
+    ret_ismd = ismd_event_wait_multiple(Nero_Events,NERO_EVENT_LAST,NERO_EVENT_TIMEOUT, &event_got);
+
+    if (ret_ismd == ISMD_ERROR_TIMEOUT) {
+        result = NERO_ERROR_INTERNAL;
+        goto exit;
+    }
+
+    for (evt = NERO_EVENT_FRAME_FLIPPED ; evt < NERO_EVENT_LAST;evt++)
+    {
+        if (Nero_Events[evt]==event_got)
+        {
+            switch (evt)
+            {
+                case NERO_EVENT_FRAME_FLIPPED:
+                {
+                	printf ("V- NERO_EVENT_FRAME_FLIPPED .. \n");
+                    event->pts = NeroVideoDecoderGetLastPts();
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_UNDERFLOW:
+                {
+                	printf ("V- NERO_EVENT_UNDERFLOW .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_UNDERFLOWRECOVRED:
+                {
+                	printf ("V- NERO_EVENT_UNDERFLOWRECOVRED .. \n");
+                    event->header = (Nero_Event_Liste_t) evt;
+                    break;
+                }
+                case NERO_EVENT_PTS_VALUE_EARLY        :
+                case NERO_EVENT_PTS_VALUE_LATE         :
+                case NERO_EVENT_PTS_PTS_VALUE_RECOVERED:
+                case NERO_EVENT_LAST:
+                default:
+                    printf("V- Unknown event %d\n", evt);
+                    event->header =(Nero_Event_Liste_t)evt;
+                    break;
+            }
+
+            /* acknowledge the event */
+            ret_ismd = ismd_event_acknowledge(event_got);
+            if (ret_ismd!=ISMD_SUCCESS)
+            {
+                printf("Failed at ismd_event_acknowledge \n");
+                result = NERO_ERROR_INTERNAL;
+                goto exit;
+            }
+            break;
+        }
+    }
+exit:
+	return (NERO_SUCCESS);
 }

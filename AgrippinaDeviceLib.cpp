@@ -154,7 +154,7 @@ bool AgrippinaDeviceLib::init()
 
     const string nonEncryptedFile = dataDir + "/nrd/systemData";
     const string encryptedFile = nonEncryptedFile + ".secure";
-    string modelName = "Agrippina IntelCE4x00 OneBox";
+    string modelName = "";
 
     // Earlier versions used an uncrypted system data file.  If one exists, we
     // encrypt the data and move it to the newer secure system data file.

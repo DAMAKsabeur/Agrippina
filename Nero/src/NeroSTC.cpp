@@ -25,11 +25,11 @@ NeroSTC::NeroSTC()
     m_NeroSTC = new NeroSTC_class();
 }
 
-NeroSTC::NeroSTC(uint8_t type)
+NeroSTC::NeroSTC(Nero_stc_type_t SyncMode)
 {
 
 	NERO_DEBUG("NeroSTC creator ... \n");
-    m_NeroSTC = new NeroSTC_class(type);
+    m_NeroSTC = new NeroSTC_class(SyncMode);
 
 }
 NeroSTC::~NeroSTC()
@@ -40,37 +40,20 @@ NeroSTC::~NeroSTC()
     m_NeroSTC = NULL;
 
 }
-Nero_error_t NeroSTC::NeroSTCSetPlayBack()
+Nero_error_t NeroSTC::ConncectSources(NeroAudioDecoder* NeroAudioDecoder_ptr, NeroVideoDecoder* NeroVideoDecoder_ptr)
 {
-	Nero_error_t result = NERO_SUCCESS;
-	NERO_DEBUG("NeroSTCSetPlayBack ... \n");
-	result = m_NeroSTC->NeroSTCSetPlayBack();
+
+	NERO_DEBUG("NeroSTC ConncectSources ... \n");
+	return(m_NeroSTC->ConncectSources(NeroAudioDecoder_ptr,NeroVideoDecoder_ptr));
+
+}
+Nero_error_t NeroSTC::DisconncectSources()
+{
+	NERO_DEBUG("NeroSTC ConncectSources ... \n");
+	return(m_NeroSTC->DisconncectSources());
+}
+uint64_t NeroSTC::GetLastSyncPts()
+{
+	return(m_NeroSTC->GetLastSyncPts());
 }
 
-nero_clock_handle_t NeroSTC::NeroSTCGetClock()
-{
-	NERO_DEBUG("NeroSTCGetClock ... \n");
-	return ((nero_clock_handle_t)m_NeroSTC->NeroSTCGetClock());
-}
-Nero_error_t NeroSTC::NeroSTCSetBaseTime(uint64_t time)
-{
-	NERO_DEBUG("NeroSTCSetBaseTime ... \n");
-	return (m_NeroSTC->NeroSTCSetBaseTime(time));
-}
-
-uint64_t NeroSTC::NeroSTCGetBaseTime()
-{
-	NERO_DEBUG("NeroSTCGetBaseTime ... \n");
-	return(m_NeroSTC->NeroSTCGetBaseTime());
-}
-
-Nero_stc_type_t NeroSTC::NeroSTCGetType()
-{
-	NERO_DEBUG("NeroSTCGetType ... \n");
-	return(m_NeroSTC->NeroSTCGetType());
-}
-Nero_error_t NeroSTC::NeroSTCSetType(Nero_stc_type_t stc_type)
-{
-	NERO_DEBUG("NeroSTCSetType ... \n");
-	return(m_NeroSTC->NeroSTCSetType(stc_type));
-}

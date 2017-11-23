@@ -53,7 +53,7 @@ class AgrippinaVideoESPlayer :  public AgrippinaESPlayer
 {
 public:
 
-	AgrippinaVideoESPlayer(NeroVideoDecoder* NeroVideoDecoder_ptr);
+	AgrippinaVideoESPlayer(NeroVideoDecoder* NeroVideoDecoder_ptr,NeroSTC* stc_ptr);
     virtual ~AgrippinaVideoESPlayer();
 
     virtual NFErr init(const struct StreamPlayerInitData& initData,
@@ -61,11 +61,12 @@ public:
                        AgrippinaPlaybackGroup* playbackGroup);
     virtual void flush();
     virtual void close();
-    virtual void decoderTask();
+    virtual void DecoderTask();
+    virtual void EventTask();
+    virtual void EventHandling(NeroEvents_t *event);
     virtual bool inputsAreExhausted();
     virtual MediaType getMediaType();
     virtual bool readyForPlaybackStart();
-
     virtual void setVideoPlaneProperties(VideoPlaneProperties);
     virtual VideoPlaneProperties getVideoPlaneProperties();
     virtual VideoPlaneProperties getPendingVideoPlaneProperties();
@@ -89,6 +90,7 @@ private:
                                   const llong& picTimestamp);
     
     std::shared_ptr<DeviceThread>          mVideoDecoderThread;
+    std::shared_ptr<DeviceThread>          mVideoEventThread;
     std::shared_ptr<AgrippinaSampleWriter>    mSampleWriter;
     Format3D                          mCurrent3DFormat;
     bool                              mVP9;
@@ -128,6 +130,7 @@ private:
     bool mIsFlushing;
 
     NeroVideoDecoder* m_NeroVideoDecoder;
+    NeroSTC* m_stc;
 };
 
 } // esplayer

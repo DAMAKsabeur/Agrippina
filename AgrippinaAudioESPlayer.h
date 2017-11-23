@@ -41,17 +41,17 @@
 #include "NeroSTC.h"
 #include "NeroAudioDecoder.h"
 #include "NeroConstants.h"
-#include "Observateur.h"
+
 namespace netflix {
 namespace device {
 namespace esplayer {
 
 class DeviceThread;
 
-class NRDP_EXPORTABLE AgrippinaAudioESPlayer :  public AgrippinaESPlayer, public Observateur
+class NRDP_EXPORTABLE AgrippinaAudioESPlayer :  public AgrippinaESPlayer
 {
 public:
-	AgrippinaAudioESPlayer(NeroAudioDecoder* NeroAudioDecoder_ptr);
+	AgrippinaAudioESPlayer(NeroAudioDecoder* NeroAudioDecoder_ptr,NeroSTC* stc_ptr);
     virtual ~AgrippinaAudioESPlayer();
 
     virtual NFErr init(const struct StreamPlayerInitData& initData,
@@ -60,7 +60,9 @@ public:
 
     virtual void flush();
     virtual void close();
-    virtual void decoderTask();
+    virtual void DecoderTask();
+    virtual void EventTask();
+    virtual void EventHandling(NeroEvents_t *event);
     virtual bool inputsAreExhausted();
     virtual MediaType getMediaType();
     virtual bool readyForPlaybackStart();
@@ -68,7 +70,7 @@ public:
     virtual void underflowReporter();
 
     bool isDisabledOrPending();
-    virtual void Update(const Observable* observable);
+
     class DecodedAudioBuffer
     {
     public:
@@ -99,7 +101,7 @@ private:
 
     std::shared_ptr<AgrippinaSampleWriter> mSampleWriter;
     std::auto_ptr<DeviceThread> mAudioDecoderThread;
-
+    std::shared_ptr<DeviceThread>          mAudioEventThread;
     // During on-the-fly audio switch, the audio player is disabled, then
     // flushed, then re-enabled -- all while the PlaybackGroup's is in the PLAY
     // state. When the player is re-enabled, it might not have actually decoded
@@ -116,6 +118,7 @@ private:
     bool mIsFlushing;
     Nero_audio_codec_t NeroAudioFMT;
     NeroAudioDecoder* m_NeroAudioDecoder;
+    NeroSTC* m_stc;
 };
 
 } // namespace esplayer

@@ -41,13 +41,19 @@ Nero_audio_codec_t AgrippinaAudioESPlayer::Nrd2NeroAudioCodec_Remap(const char* 
 
 AgrippinaAudioESPlayer::~AgrippinaAudioESPlayer()
 {
+	Nero_error_t result = NERO_SUCCESS;
     setCloseThreadsFlag();
+    result = m_NeroAudioDecoder->UnInit();
+	m_NeroAudioDecoder = NULL;
+	m_stc = NULL;
 }
 
 void AgrippinaAudioESPlayer::close()
 {
+	Nero_error_t result = NERO_SUCCESS;
     setCloseThreadsFlag();
     AgrippinaESPlayer::close();
+    result = m_NeroAudioDecoder->Close();
 }
 
 AgrippinaAudioESPlayer::AgrippinaAudioESPlayer() :
@@ -58,12 +64,13 @@ AgrippinaAudioESPlayer::AgrippinaAudioESPlayer() :
 
 }
 
-AgrippinaAudioESPlayer::AgrippinaAudioESPlayer(NeroAudioDecoder* NeroAudioDecoder_ptr) :
+AgrippinaAudioESPlayer::AgrippinaAudioESPlayer(NeroAudioDecoder* NeroAudioDecoder_ptr,NeroSTC* stc_ptr) :
   mPlaybackPending(false),
   mInputExhausted(false),
   mIsFlushing(false)
 {
 	m_NeroAudioDecoder = NeroAudioDecoder_ptr;
+	m_stc = stc_ptr;
 
 }
 
@@ -95,13 +102,34 @@ NFErr AgrippinaAudioESPlayer::init(const struct StreamPlayerInitData& initData,
     }
     mSampleWriter.reset(new AgrippinaSampleWriter(NOT_3D, callback));
 
-    mAudioDecoderThread.reset(new DeviceThread(*this, &AgrippinaESPlayer::decoderTask,
+    mAudioDecoderThread.reset(new DeviceThread(*this, &AgrippinaESPlayer::DecoderTask,
                                                &THREAD_REFERENCE_DPI_AUDIO_DECODER));
+    mAudioEventThread.reset(new DeviceThread(*this, &AgrippinaESPlayer::EventTask,
+                                               &THREAD_REFERENCE_DPI_AUDIO_EVENT));
 
     return err;
 }
 
-void AgrippinaAudioESPlayer::decoderTask()
+void AgrippinaAudioESPlayer::EventHandling(NeroEvents_t *event)
+{
+
+
+}
+void AgrippinaAudioESPlayer::EventTask()
+{
+    const Time EVENT_TASK_WAIT_TIME(100);
+    NeroEvents_t event;
+
+    while(closeThreadsFlagIsSet() == false)
+    {
+        if (m_NeroAudioDecoder->NeroEventWait(&event) == NERO_SUCCESS)
+        {
+        	EventHandling(&event);
+        }
+        Thread::sleep(EVENT_TASK_WAIT_TIME);
+    }
+}
+void AgrippinaAudioESPlayer::DecoderTask()
 {
     static const Time WAIT_FOR_AUDIO_SAMPLE_BUFFER(30);
     static const Time WAIT_FOR_AUDIO_DATA(100);

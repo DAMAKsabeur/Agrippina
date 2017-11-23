@@ -32,10 +32,12 @@ AgrippinaPlaybackGroup::AgrippinaPlaybackGroup(AgrippinaESManager& ESManager, ui
   mESManager(ESManager),
   mPipelineId(pipelineId)
 {
-	stc = new NeroSTC(0x01);
-	stc->NeroSTCSetType(NERO_STC_VIDEO_MASTER);
-	m_NeroAudioDecoder = new  NeroAudioDecoder(stc);
-	m_NeroVideoDecoder = new  NeroVideoDecoder(stc);
+	NeroSystemClock::init();
+	Nero_stc_type_t SyncMode = NERO_STC_VIDEO_MASTER;
+	m_stc = new NeroSTC(SyncMode);
+	m_NeroAudioDecoder = new  NeroAudioDecoder();
+	m_NeroVideoDecoder = new  NeroVideoDecoder();
+	m_stc->ConncectSources(m_NeroAudioDecoder, m_NeroVideoDecoder);
 	m_NeroVideoDecoder->SetupPlane();
 }
 
@@ -43,10 +45,12 @@ AgrippinaPlaybackGroup::~AgrippinaPlaybackGroup()
 {
     ScopedMutex cs(mPlayersMutex);
     // Delete any stream players that have not been deleted
-    delete stc;
+    NeroSystemClock::fini();
+    m_stc->DisconncectSources();
+    delete m_stc;
     delete m_NeroAudioDecoder;
     delete m_NeroVideoDecoder;
-    stc = NULL;
+    m_stc = NULL;
     m_NeroAudioDecoder = NULL;
     m_NeroVideoDecoder = NULL;
     set<AgrippinaESPlayer*>::iterator it;
@@ -99,7 +103,7 @@ AgrippinaPlaybackGroup::createStreamPlayer(const struct StreamPlayerInitData& in
                                              deviceSpecificErrorCode,
                                              errInfo));
         }
-        player = new AgrippinaAudioESPlayer(m_NeroAudioDecoder);
+        player = new AgrippinaAudioESPlayer(m_NeroAudioDecoder,m_stc);
 
 
     } else {
@@ -152,7 +156,7 @@ AgrippinaPlaybackGroup::createStreamPlayer(const struct StreamPlayerInitData& in
             }
         }
 
-        player = new AgrippinaVideoESPlayer(m_NeroVideoDecoder);
+        player = new AgrippinaVideoESPlayer(m_NeroVideoDecoder,m_stc);
     }
 
     if(player == NULL)
@@ -223,6 +227,14 @@ bool AgrippinaPlaybackGroup::setPlaybackState(PlaybackState state)
     Nero_error_t result = NERO_SUCCESS;
     if(state == PAUSE)
     {
+       /* Pause Nero Video Decoder first */
+    	result = m_NeroVideoDecoder->Pause();
+    	if (NERO_SUCCESS != result){
+            // Players are not ready to transition from play to pause. Return
+            // false.  The SDK will wait a few ms and try again.
+            return false;
+    	}
+    	/* Pause Nero Audio Decoder sed */
         // Partners should pause the pipeline
     	result = m_NeroAudioDecoder->Pause();
     	if (NERO_SUCCESS != result){
@@ -230,12 +242,7 @@ bool AgrippinaPlaybackGroup::setPlaybackState(PlaybackState state)
             // false.  The SDK will wait a few ms and try again.
             return false;
     	}
-    	result = m_NeroVideoDecoder->Pause();
-    	if (NERO_SUCCESS != result){
-            // Players are not ready to transition from play to pause. Return
-            // false.  The SDK will wait a few ms and try again.
-            return false;
-    	}
+
 
     }
     else if(state == PLAY)
@@ -247,18 +254,20 @@ bool AgrippinaPlaybackGroup::setPlaybackState(PlaybackState state)
             return false;
         }
         // Partners should play the pipeline
-    	result = m_NeroAudioDecoder->Play();
-    	if (NERO_SUCCESS != result){
-            // Players are not ready to transition from play to pause. Return
-            // false.  The SDK will wait a few ms and try again.
-            return false;
-    	}
     	result = m_NeroVideoDecoder->Play();
     	if (NERO_SUCCESS != result){
             // Players are not ready to transition from play to pause. Return
             // false.  The SDK will wait a few ms and try again.
             return false;
     	}
+
+    	result = m_NeroAudioDecoder->Play();
+    	if (NERO_SUCCESS != result){
+            // Players are not ready to transition from play to pause. Return
+            // false.  The SDK will wait a few ms and try again.
+            return false;
+    	}
+
     }
     else {
         // We only support PAUSE and PLAY.  If a new state is added make sure handling gets implemented here!

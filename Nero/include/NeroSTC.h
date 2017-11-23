@@ -10,7 +10,8 @@
 #include "NeroConstants.h"
 //#include "NeroIntelCE4x00Constants.h"
 #include "NeroIntelCE4x00STC.h"
-
+#include "NeroAudioDecoder.h"
+#include "NeroVideoDecoder.h"
 /* define macros */
 
 using namespace std;
@@ -18,15 +19,11 @@ using namespace std;
 class NeroSTC{
 public:
 NeroSTC();
-NeroSTC (uint8_t STCtype);
+NeroSTC (Nero_stc_type_t SyncMode);
 ~NeroSTC();
-
-Nero_error_t NeroSTCSetPlayBack();
-nero_clock_handle_t NeroSTCGetClock();
-Nero_error_t NeroSTCSetBaseTime(uint64_t time);
-uint64_t NeroSTCGetBaseTime();
-Nero_stc_type_t NeroSTCGetType();
-Nero_error_t NeroSTCSetType(Nero_stc_type_t stc_type);
+Nero_error_t ConncectSources(NeroAudioDecoder* NeroAudioDecoder_ptr, NeroVideoDecoder* NeroVideoDecoder_ptr);
+Nero_error_t DisconncectSources();
+uint64_t GetLastSyncPts();
 private:
 /* private functions */
 NeroSTC_class* m_NeroSTC;
